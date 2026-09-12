@@ -1,0 +1,9 @@
+torch
+torchvision
+pandas
+scikit-learn
+opencv-python
+Pillow
+imagehash
+streamlit
+matplotlib
