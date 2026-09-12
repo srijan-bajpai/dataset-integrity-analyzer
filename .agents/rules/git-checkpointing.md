@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # DIA Git Checkpoint Protocol
 
 Git is the rollback and recovery mechanism for autonomous development.
@@ -81,3 +85,15 @@ Never delete Git history merely to hide a failed experiment.
 Do not ask the human for permission to make ordinary Git commits or pushes.
 
 Git checkpointing is part of the autonomous workflow.
+
+During autonomous execution, treat PROJECT_STATE.md,
+AUTONOMOUS_MASTER_PLAN.md and other project state files as agent-owned.
+
+Update them only at meaningful milestones rather than after every small
+operation.
+
+Do not repeatedly rewrite project-state files while an autonomous goal is
+actively running.
+
+Prefer appending concise milestone updates rather than rewriting large
+sections.
