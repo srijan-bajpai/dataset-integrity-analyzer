@@ -1,0 +1,155 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import os
+import time
+
+from dia.core.orchestrator import DIAOrchestrator
+
+st.set_page_config(page_title="Dataset Integrity Analyzer", layout="wide", page_icon="🔍")
+
+st.title("Dataset Integrity Analyzer (DIA)")
+st.markdown("Automated Dataset Health Auditing and Bias Impact Prediction")
+
+st.sidebar.header("Dataset Configuration")
+dataset_path = st.sidebar.text_input("Local Dataset Path", value="data/demo_dataset", help="Path to a folder-per-class image dataset.")
+
+if 'analysis_complete' not in st.session_state:
+    st.session_state.analysis_complete = False
+if 'results' not in st.session_state:
+    st.session_state.results = None
+if 'df' not in st.session_state:
+    st.session_state.df = None
+
+if st.sidebar.button("Run Full Analysis"):
+    if not os.path.exists(dataset_path):
+        st.sidebar.error("Path does not exist.")
+    else:
+        st.session_state.analysis_complete = False
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # Simple text parsing callback to update the spinner
+        def update_ui(msg):
+            status_text.text(msg)
+            # Advance progress slightly just for UX
+            current = st.session_state.get('fake_prog', 0.1)
+            new_prog = min(current + 0.1, 0.9)
+            st.session_state.fake_prog = new_prog
+            progress_bar.progress(new_prog)
+            
+        st.session_state.fake_prog = 0.1
+        try:
+            start_time = time.time()
+            orchestrator = DIAOrchestrator(dataset_path)
+            results, df = orchestrator.run_all(update_callback=update_ui)
+            
+            progress_bar.progress(1.0)
+            status_text.text(f"Analysis complete in {time.time()-start_time:.1f} seconds!")
+            
+            st.session_state.results = results
+            st.session_state.df = df
+            st.session_state.analysis_complete = True
+            
+        except Exception as e:
+            st.error(f"Analysis failed: {str(e)}")
+
+if st.session_state.analysis_complete:
+    res = st.session_state.results
+    df = st.session_state.df
+    
+    # 1. AI Readiness Score
+    st.header("1. AI Readiness Score")
+    score = res['readiness']['overall_score']
+    verdict = res['readiness']['verdict']
+    
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        color = "green" if score > 80 else "orange" if score > 50 else "red"
+        st.markdown(f"<h1 style='text-align: center; color: {color}; font-size: 5em;'>{score}</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='text-align: center;'>{verdict}</h3>", unsafe_allow_html=True)
+        
+    with col2:
+        # Radar Chart for sub-scores
+        categories = list(res['readiness']['sub_scores'].keys())
+        values = list(res['readiness']['sub_scores'].values())
+        
+        fig = go.Figure(data=go.Scatterpolar(
+          r=values + [values[0]],
+          theta=categories + [categories[0]],
+          fill='toself',
+          marker=dict(color='blue')
+        ))
+        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), showlegend=False, height=300)
+        st.plotly_chart(fig, use_container_width=True)
+        
+    st.divider()
+    
+    # 2. Bias Impact Prediction
+    st.header("2. Bias Impact Predictor (C2)")
+    impact = res.get('bias_impact', {})
+    
+    i_col1, i_col2, i_col3 = st.columns(3)
+    i_col1.metric("Predicted Accuracy Degradation", f"-{impact.get('expected_accuracy_drop_pct', 0)}%")
+    i_col2.metric("Worst-Case Scenario", f"-{impact.get('interval_high', 0)}%")
+    i_col3.metric("Confound Penalty Applied", f"{impact.get('features', {}).get('confound_count', 0)*3}%")
+    
+    st.info("The Bias Impact Predictor uses a regression model calibrated against early feasibility spikes to map dataset structural health directly to expected downstream model performance drops. (Phase 6 Prototype)")
+
+    st.divider()
+    
+    # 3. Cross-Dimensional Confounds
+    st.header("3. Cross-Dimensional Confounds")
+    confounds = res.get('confounds', {}).get('detected_confounds', [])
+    if not confounds:
+        st.success("No cross-dimensional confounds detected. The dimensions appear independent.")
+    else:
+        for c in confounds:
+            st.error(f"**{c['type']}**: {c['description']}")
+            
+    st.divider()
+    
+    # 4. Dimensional Deep Dive
+    st.header("4. Dimensional Deep Dive")
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Balance", "Quality", "Duplicates", "Diversity", "Labels"])
+    
+    with tab1:
+        st.subheader("Class Distribution")
+        counts = res['distribution']['class_counts']
+        fig = px.bar(x=list(counts.keys()), y=list(counts.values()), labels={'x':'Class', 'y':'Count'})
+        st.plotly_chart(fig)
+        st.metric("Imbalance Ratio", f"{res['distribution']['imbalance_ratio']:.2f}:1")
+        
+    with tab2:
+        st.subheader("Image Quality")
+        st.metric("Blurred Images (%)", f"{res['quality']['pct_blurred']:.1f}%")
+        st.metric("Underexposed Images (%)", f"{res['quality']['pct_underexposed']:.1f}%")
+        if 'quality_blur' in df.columns:
+            fig = px.box(df, x="ground_truth_class", y="quality_blur", title="Blur Distribution by Class")
+            st.plotly_chart(fig)
+            
+    with tab3:
+        st.subheader("Duplicates")
+        st.metric("Exact Duplicates", res['duplicates']['exact_duplicates'])
+        st.metric("Redundancy Ratio", f"{res['duplicates']['redundancy_ratio']*100:.1f}%")
+        
+    with tab4:
+        st.subheader("Visual Diversity")
+        st.metric("Cluster Entropy", f"{res['diversity']['cluster_entropy']:.2f}")
+        
+    with tab5:
+        st.subheader("Label Integrity")
+        st.metric("Suspected Mislabels", f"{res['labels']['label_noise_rate']*100:.1f}%")
+        if 'flag_suspected_mislabel' in df.columns and df['flag_suspected_mislabel'].sum() > 0:
+            suspicious = df[df['flag_suspected_mislabel']]
+            st.dataframe(suspicious[['path', 'ground_truth_class', 'predicted_class', 'label_issue_prob']].head())
+
+    st.divider()
+
+    # 5. Recommendations
+    st.header("5. Recommendations")
+    recs = res.get('recommendations', [])
+    for r in recs:
+        icon = "🚨" if r['priority'] in ['Critical', 'High'] else "⚠️" if r['priority'] == 'Medium' else "✅"
+        st.markdown(f"{icon} **[{r['category']}]**: {r['action']}")
