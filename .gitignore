@@ -1,75 +1,54 @@
-# Python virtual environments
+# Python
 .venv/
 venv/
-env/
-ENV/
-
-# node_modules
-node_modules/
-
-# build/dist directories
-build/
-dist/
-*.egg-info/
-
-# __pycache__
 __pycache__/
 *.py[cod]
-*$py.class
 
-# model checkpoints
+# Node
+node_modules/
+dist/
+build/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Datasets
+datasets/
+data/
+*.zip
+*.tar
+*.tar.gz
+
+# ML artifacts
 *.pt
 *.pth
 *.ckpt
-*.h5
 *.onnx
-models/
-weights/
+*.safetensors
 
-# large datasets
-data/
-datasets/
-*.zip
-*.tar.gz
-*.tgz
-
-# generated embeddings
+# Embeddings / caches
 *.npy
 *.npz
+cache/
+caches/
+artifacts/
 
-# experiment caches
-.cache/
-.pytest_cache/
-.coverage
-htmlcov/
-artifact_cache/
-
-# SQLite runtime databases where appropriate
+# Databases
+*.db
 *.sqlite
 *.sqlite3
-*.db
-*.db3
 
-# .env files, credentials, API keys
-.env
-.env.*
-secret*
-credential*
-key*
-*token*
-*.pem
+# Experiment outputs
+experiments/**/runs/
+experiments/**/outputs/
 
-# OS/editor temporary files
-.DS_Store
-Thumbs.db
+# IDE / OS
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-*.tmp
-*.bak
+.DS_Store
+Thumbs.db
 
 # Local python
 python_nuget/
-
