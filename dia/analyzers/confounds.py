@@ -24,9 +24,13 @@ class ConfoundAnalyzer(BaseAnalyzer):
                 
                 # Check if all groups have at least 5 valid samples for KW test
                 if all(len(g) >= 5 for g in groups):
+                    all_vals = np.concatenate(groups)
+                    # Skip if all values across all groups are identical (ties variance = 0)
+                    if np.all(all_vals == all_vals[0]):
+                        continue
                     stat, p_val = kruskal(*groups)
                     
-                    if p_val < 0.05: # Simple threshold, no Benjamini-Hochberg for prototype simplicity unless requested
+                    if not np.isnan(p_val) and p_val < 0.05: # Simple threshold, no Benjamini-Hochberg for prototype simplicity unless requested
                         confounds.append({
                             'type': 'Quality-Class Confound',
                             'dimension_a': metric,
@@ -36,13 +40,16 @@ class ConfoundAnalyzer(BaseAnalyzer):
                         })
                         
         # 2. Redundancy x Class Confound (REQ-56)
-        if 'duplicate_group' in self.df.columns:
+        if 'duplicate_group' in self.df.columns or 'phash' in self.df.columns:
             for c in classes:
                 class_df = self.df[self.df['ground_truth_class'] == c]
                 raw_count = len(class_df)
-                unique_count = len(class_df.drop_duplicates(subset=['duplicate_group']))
-                
                 if raw_count > 0:
+                    if 'phash' in class_df.columns:
+                        unique_count = class_df['phash'].dropna().nunique() + class_df['phash'].isna().sum()
+                    else:
+                        unique_count = class_df['duplicate_group'].isna().sum() + class_df['duplicate_group'].dropna().nunique()
+                        
                     redundancy = (raw_count - unique_count) / raw_count
                     if redundancy > 0.1: # If more than 10% of the class is redundant
                         confounds.append({

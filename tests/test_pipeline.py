@@ -1,7 +1,12 @@
 import os
+import sys
+from pathlib import Path
+
+# Add project root to sys.path so 'dia' package can be imported directly
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import cv2
 import numpy as np
-from pathlib import Path
 
 def create_dummy_dataset(root="test_data"):
     """Create a tiny dummy dataset for testing the pipeline."""

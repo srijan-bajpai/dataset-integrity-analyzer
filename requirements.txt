@@ -2,8 +2,10 @@ torch
 torchvision
 pandas
 scikit-learn
+scipy
 opencv-python
 Pillow
 imagehash
 streamlit
 matplotlib
+plotly

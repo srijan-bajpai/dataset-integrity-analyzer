@@ -18,12 +18,17 @@ class LabelAuditAnalyzer(BaseAnalyzer):
         y_true = self.df['ground_truth_class'].values
         classes = np.unique(y_true)
         
-        if len(classes) < 2:
+        counts = np.unique(y_true, return_counts=True)[1]
+        min_samples = np.min(counts) if len(counts) > 0 else 0
+        
+        if len(classes) < 2 or min_samples < 2:
             self.df['label_issue_prob'] = 0.0
             self.df['flag_suspected_mislabel'] = False
+            self.df['predicted_class'] = y_true
             return {'label_noise_rate': 0.0}
             
-        cv = StratifiedKFold(n_splits=min(5, np.min(np.unique(y_true, return_counts=True)[1])), shuffle=True, random_state=42)
+        n_splits = min(5, min_samples)
+        cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
         model = LogisticRegression(max_iter=1000, class_weight='balanced')
         
         pred_probs = np.zeros((len(y_true), len(classes)))
@@ -43,6 +48,7 @@ class LabelAuditAnalyzer(BaseAnalyzer):
             # Fails if some classes have too few samples for k-fold
             self.df['label_issue_prob'] = 0.0
             self.df['flag_suspected_mislabel'] = False
+            self.df['predicted_class'] = y_true
             return {'label_noise_rate': 0.0}
             
         # Confident learning simplified approximation:
