@@ -107,11 +107,24 @@ if st.session_state.analysis_complete:
         categories = list(sub_scores.keys())
         values = list(sub_scores.values())
         
+        # Map dimension names to plain-language hover descriptions
+        dim_explanations = {
+            'Balance': 'How evenly samples are distributed across classes (100 = perfectly even)',
+            'Fairness': 'Whether demographic groups are represented fairly (placeholder in prototype)',
+            'Quality': 'Image sharpness, exposure, and contrast (100 = no defects found)',
+            'Uniqueness': 'How free the dataset is from duplicate images (100 = no duplicates)',
+            'Diversity': 'How visually varied the images are (100 = maximum variety)',
+            'Label Integrity': 'How reliable the class labels are (100 = no suspected mislabels)',
+        }
+        hover_texts = [dim_explanations.get(c, c) + f'<br>Score: {v:.1f}/100' for c, v in zip(categories, values)]
+
         fig = go.Figure(data=go.Scatterpolar(
           r=values + [values[0]],
           theta=categories + [categories[0]],
           fill='toself',
-          marker=dict(color='blue')
+          marker=dict(color='blue'),
+          text=hover_texts + [hover_texts[0]],
+          hoverinfo='text',
         ))
         fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), showlegend=False, height=300)
         st.plotly_chart(fig, width='stretch')
@@ -132,9 +145,12 @@ if st.session_state.analysis_complete:
     confound_penalty = confound_count * 3
 
     i_col1, i_col2, i_col3 = st.columns(3)
-    i_col1.metric("Predicted Accuracy Drop", f"-{drop}%")
-    i_col2.metric("Worst-Case Drop", f"-{worst}%")
-    i_col3.metric("Confound Penalty", f"{confound_penalty}%")
+    i_col1.metric("Predicted Accuracy Drop", f"-{drop}%",
+                  help="How much worse your model's test accuracy is expected to be compared to training on an ideal, defect-free version of this dataset.")
+    i_col2.metric("Worst-Case Drop", f"-{worst}%",
+                  help="The upper bound of the prediction interval. In a pessimistic scenario, accuracy could drop by this much.")
+    i_col3.metric("Confound Penalty", f"{confound_penalty}%",
+                  help="Extra accuracy loss caused specifically by overlapping issues (confounds). Each detected confound adds roughly 3% to the predicted drop.")
 
     # Dynamic conclusion based on the numbers
     if drop < 3:
@@ -217,9 +233,13 @@ if st.session_state.analysis_complete:
         ir = res['distribution']['imbalance_ratio']
         severity = res['distribution'].get('imbalance_severity', '')
 
-        fig = px.bar(x=list(counts.keys()), y=list(counts.values()), labels={'x':'Class', 'y':'Count'})
+        fig = px.bar(x=list(counts.keys()), y=list(counts.values()), labels={'x':'Class', 'y':'Sample Count'})
+        fig.update_traces(
+            hovertemplate='<b>%{x}</b><br>Sample Count: %{y}<br><i>Number of images in this class</i><extra></extra>'
+        )
         st.plotly_chart(fig)
-        st.metric("Imbalance Ratio", f"{ir:.2f}:1")
+        st.metric("Imbalance Ratio", f"{ir:.2f}:1",
+                  help="The ratio of the largest class to the smallest class. A ratio of 1:1 means perfectly balanced. Higher ratios mean some classes have far more images than others.")
 
         # Dynamic conclusion
         max_class = max(counts, key=counts.get)
@@ -253,8 +273,10 @@ if st.session_state.analysis_complete:
         pct_under = res['quality']['pct_underexposed']
 
         q_col1, q_col2 = st.columns(2)
-        q_col1.metric("Blurred Images", f"{pct_blur:.1f}%")
-        q_col2.metric("Underexposed Images", f"{pct_under:.1f}%")
+        q_col1.metric("Blurred Images", f"{pct_blur:.1f}%",
+                       help="Percentage of images with a blur score below the sharpness threshold (variance of Laplacian < 100). Blurry images make it harder for models to learn fine-grained features.")
+        q_col2.metric("Underexposed Images", f"{pct_under:.1f}%",
+                       help="Percentage of images that are too dark (average brightness below 40 on a 0-255 scale). Dark images contain less distinguishable detail for the model.")
 
         if 'quality_blur' in df.columns:
             fig = go.Figure()
@@ -345,8 +367,10 @@ if st.session_state.analysis_complete:
         dup_groups = res['duplicates'].get('duplicate_groups', 0)
 
         d_col1, d_col2 = st.columns(2)
-        d_col1.metric("Exact Duplicates", exact_dups)
-        d_col2.metric("Redundancy Rate", f"{redundancy*100:.1f}%")
+        d_col1.metric("Exact Duplicates", exact_dups,
+                      help="The number of images that are visually identical to another image in the dataset (detected via perceptual hashing).")
+        d_col2.metric("Redundancy Rate", f"{redundancy*100:.1f}%",
+                      help="The percentage of total images that are duplicates. A high rate means a significant fraction of your dataset is repeated data rather than new information.")
 
         if exact_dups == 0:
             st.info(
@@ -376,8 +400,10 @@ if st.session_state.analysis_complete:
         mean_dist = res['diversity'].get('mean_pairwise_distance', 0)
 
         dv_col1, dv_col2 = st.columns(2)
-        dv_col1.metric("Cluster Entropy", f"{cluster_entropy:.2f}")
-        dv_col2.metric("Avg. Pairwise Distance", f"{mean_dist:.3f}")
+        dv_col1.metric("Cluster Entropy", f"{cluster_entropy:.2f}",
+                       help="Measures how evenly images are spread across visual groups (clusters). Ranges from 0 to 1. A value near 1.0 means images are spread evenly across many visual styles. A value near 0 means most images look alike.")
+        dv_col2.metric("Avg. Pairwise Distance", f"{mean_dist:.3f}",
+                       help="The average visual difference between any two randomly chosen images (measured via cosine distance on feature embeddings). Higher values mean the images are more visually distinct from each other.")
 
         if cluster_entropy > 0.85:
             st.info(
@@ -405,11 +431,26 @@ if st.session_state.analysis_complete:
         noise_rate = res['labels']['label_noise_rate']
         noise_pct = noise_rate * 100
 
-        st.metric("Suspected Mislabel Rate", f"{noise_pct:.1f}%")
+        st.metric("Suspected Mislabel Rate", f"{noise_pct:.1f}%",
+                  help="The percentage of images whose assigned class label may be wrong, detected by training a classifier and finding samples where the model's prediction confidently disagrees with the given label.")
 
         if 'flag_suspected_mislabel' in df.columns and df['flag_suspected_mislabel'].sum() > 0:
             suspicious = df[df['flag_suspected_mislabel']]
-            st.dataframe(suspicious[['path', 'ground_truth_class', 'predicted_class', 'label_issue_prob']].head(10))
+            display_df = suspicious[['path', 'ground_truth_class', 'predicted_class', 'label_issue_prob']].head(10)
+            display_df = display_df.rename(columns={
+                'path': 'File Path',
+                'ground_truth_class': 'Current Label',
+                'predicted_class': 'Model Thinks It Is',
+                'label_issue_prob': 'Confidence Gap',
+            })
+            st.dataframe(display_df)
+            st.caption(
+                "**Column guide:** "
+                "'Current Label' is the class this image is tagged as in the dataset. "
+                "'Model Thinks It Is' is what the classifier predicted instead. "
+                "'Confidence Gap' is how strongly the model disagrees with the current label "
+                "(higher = more likely to be a genuine mislabel)."
+            )
 
         if noise_pct < 2:
             st.info(
