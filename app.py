@@ -12,6 +12,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import time
+import numpy as np
 
 from dia.core.orchestrator import DIAOrchestrator
 
@@ -113,7 +114,7 @@ if st.session_state.analysis_complete:
           marker=dict(color='blue')
         ))
         fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), showlegend=False, height=300)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     st.info(_readiness_conclusion(score, verdict, sub_scores))
         
@@ -256,8 +257,64 @@ if st.session_state.analysis_complete:
         q_col2.metric("Underexposed Images", f"{pct_under:.1f}%")
 
         if 'quality_blur' in df.columns:
-            fig = px.box(df, x="ground_truth_class", y="quality_blur", title="Blur Distribution by Class")
+            fig = go.Figure()
+            classes_sorted = sorted(df['ground_truth_class'].unique())
+            for cls in classes_sorted:
+                cls_vals = df[df['ground_truth_class'] == cls]['quality_blur'].dropna()
+                if len(cls_vals) == 0:
+                    continue
+
+                q1_val = float(np.percentile(cls_vals, 25))
+                med_val = float(np.percentile(cls_vals, 50))
+                q3_val = float(np.percentile(cls_vals, 75))
+                iqr = q3_val - q1_val
+                lower_f = float(max(cls_vals.min(), q1_val - 1.5 * iqr))
+                upper_f = float(min(cls_vals.max(), q3_val + 1.5 * iqr))
+                min_val = float(cls_vals.min())
+                max_val = float(cls_vals.max())
+
+                # Standard box trace (default hover disabled)
+                fig.add_trace(go.Box(
+                    y=cls_vals,
+                    name=cls,
+                    boxpoints='outliers',
+                    hoverinfo='skip',
+                    marker_color='#636EFA',
+                ))
+
+                # Invisible scatter at the median to carry the custom hover
+                hover_text = (
+                    f"<b>{cls}</b><br><br>"
+                    f"<b>Max</b> (highest blur score): {max_val:,.1f}<br>"
+                    f"<b>Upper Fence</b> (above this = outlier): {upper_f:,.1f}<br>"
+                    f"<b>Q3</b> (75% of images are below this): {q3_val:,.1f}<br>"
+                    f"<b>Median</b> (middle value): {med_val:,.1f}<br>"
+                    f"<b>Q1</b> (25% of images are below this): {q1_val:,.1f}<br>"
+                    f"<b>Lower Fence</b> (below this = outlier): {lower_f:,.1f}<br>"
+                    f"<b>Min</b> (lowest blur score): {min_val:,.1f}<br>"
+                    f"<br><i>Higher score = sharper image</i>"
+                )
+                fig.add_trace(go.Scatter(
+                    x=[cls], y=[med_val],
+                    mode='markers',
+                    marker=dict(size=12, color='rgba(0,0,0,0)'),
+                    hoverinfo='text',
+                    hovertext=hover_text,
+                    showlegend=False,
+                ))
+
+            fig.update_layout(
+                title="Blur Distribution by Class",
+                xaxis_title="Class",
+                yaxis_title="Blur Score (Variance of Laplacian)",
+                showlegend=False,
+            )
             st.plotly_chart(fig)
+            st.caption(
+                "**How to read this chart:** Each box shows the middle 50% of blur scores for a class. "
+                "The line inside the box is the median. Whiskers extend to the farthest non-outlier values. "
+                "Dots beyond the whiskers are outliers. Higher blur scores mean sharper images."
+            )
 
         total_defect = pct_blur + pct_under
         if total_defect < 3:
