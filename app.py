@@ -15,7 +15,7 @@ import time
 
 from dia.core.orchestrator import DIAOrchestrator
 
-st.set_page_config(page_title="Dataset Integrity Analyzer", layout="wide", page_icon="🔍")
+st.set_page_config(page_title="Dataset Integrity Analyzer", layout="wide")
 
 st.title("Dataset Integrity Analyzer (DIA)")
 st.markdown("Automated Dataset Health Auditing and Bias Impact Prediction")
@@ -98,17 +98,23 @@ if st.session_state.analysis_complete:
     st.header("2. Bias Impact Predictor (C2)")
     impact = res.get('bias_impact', {})
     
+    with st.expander("What does this mean?", expanded=True):
+        st.write("This section predicts how much your model's performance will suffer due to the dataset's current flaws. If you train a model on this dataset, its test accuracy is expected to drop by the predicted percentage compared to training on a healthy dataset. The 'Confound Penalty' indicates the portion of this drop caused specifically by overlapping issues (e.g., blurry images always belonging to one class) that confuse the model.")
+        st.caption("Technical note: The predictor uses a regression model calibrated against early feasibility spikes to map dataset structural health directly to expected downstream model performance drops. (Phase 6 Prototype)")
+
     i_col1, i_col2, i_col3 = st.columns(3)
     i_col1.metric("Predicted Accuracy Degradation", f"-{impact.get('expected_accuracy_drop_pct', 0)}%")
     i_col2.metric("Worst-Case Scenario", f"-{impact.get('interval_high', 0)}%")
     i_col3.metric("Confound Penalty Applied", f"{impact.get('features', {}).get('confound_count', 0)*3}%")
-    
-    st.info("The Bias Impact Predictor uses a regression model calibrated against early feasibility spikes to map dataset structural health directly to expected downstream model performance drops. (Phase 6 Prototype)")
 
     st.divider()
     
     # 3. Cross-Dimensional Confounds
     st.header("3. Cross-Dimensional Confounds")
+    
+    with st.expander("What does this mean?", expanded=True):
+        st.write("A 'confound' occurs when two different dataset issues overlap systematically. For example, if most images in the 'Bird' class are blurry, the model might learn to associate blurriness with birds rather than learning the actual visual features of a bird. This section flags those overlapping patterns so you can fix them before training.")
+
     confounds = res.get('confounds', {}).get('detected_confounds', [])
     if not confounds:
         st.success("No cross-dimensional confounds detected. The dimensions appear independent.")
@@ -120,10 +126,13 @@ if st.session_state.analysis_complete:
     
     # 4. Dimensional Deep Dive
     st.header("4. Dimensional Deep Dive")
+    st.write("This section breaks down the dataset's health into five key areas. Reviewing these individual dimensions helps pinpoint exactly what needs to be fixed to improve the overall AI Readiness Score.")
+    
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Balance", "Quality", "Duplicates", "Diversity", "Labels"])
     
     with tab1:
         st.subheader("Class Distribution")
+        st.caption("Checks if all classes have enough examples. A high imbalance ratio means the model might become biased toward the majority class.")
         counts = res['distribution']['class_counts']
         fig = px.bar(x=list(counts.keys()), y=list(counts.values()), labels={'x':'Class', 'y':'Count'})
         st.plotly_chart(fig)
@@ -131,6 +140,7 @@ if st.session_state.analysis_complete:
         
     with tab2:
         st.subheader("Image Quality")
+        st.caption("Looks for image issues like blur or poor lighting that can hinder the model's ability to extract meaningful features.")
         st.metric("Blurred Images (%)", f"{res['quality']['pct_blurred']:.1f}%")
         st.metric("Underexposed Images (%)", f"{res['quality']['pct_underexposed']:.1f}%")
         if 'quality_blur' in df.columns:
@@ -139,15 +149,18 @@ if st.session_state.analysis_complete:
             
     with tab3:
         st.subheader("Duplicates")
+        st.caption("Finds copied images that can skew training and lead to data leakage if they appear in both training and testing sets.")
         st.metric("Exact Duplicates", res['duplicates']['exact_duplicates'])
         st.metric("Redundancy Ratio", f"{res['duplicates']['redundancy_ratio']*100:.1f}%")
         
     with tab4:
         st.subheader("Visual Diversity")
+        st.caption("Measures visual variety. A higher cluster entropy means your dataset captures a wider variety of real-world scenarios, making your model more robust.")
         st.metric("Cluster Entropy", f"{res['diversity']['cluster_entropy']:.2f}")
         
     with tab5:
         st.subheader("Label Integrity")
+        st.caption("Identifies potentially incorrect tags. High label noise can severely degrade model accuracy by teaching it the wrong associations.")
         st.metric("Suspected Mislabels", f"{res['labels']['label_noise_rate']*100:.1f}%")
         if 'flag_suspected_mislabel' in df.columns and df['flag_suspected_mislabel'].sum() > 0:
             suspicious = df[df['flag_suspected_mislabel']]
@@ -157,7 +170,15 @@ if st.session_state.analysis_complete:
 
     # 5. Recommendations
     st.header("5. Recommendations")
+    
+    with st.expander("What does this mean?", expanded=True):
+        st.write("These are actionable steps to fix the issues detected above, ordered by their severity. Addressing critical recommendations will have the most significant impact on your dataset's readiness and model performance.")
+
     recs = res.get('recommendations', [])
     for r in recs:
-        icon = "🚨" if r['priority'] in ['Critical', 'High'] else "⚠️" if r['priority'] == 'Medium' else "✅"
-        st.markdown(f"{icon} **[{r['category']}]**: {r['action']}")
+        if r['priority'] in ['Critical', 'High']:
+            st.error(f"**[CRITICAL: {r['category']}]**: {r['action']}")
+        elif r['priority'] == 'Medium':
+            st.warning(f"**[MEDIUM: {r['category']}]**: {r['action']}")
+        else:
+            st.success(f"**[OK: {r['category']}]**: {r['action']}")

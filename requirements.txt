@@ -9,3 +9,5 @@ imagehash
 streamlit
 matplotlib
 plotly
+numpy
+pytest
