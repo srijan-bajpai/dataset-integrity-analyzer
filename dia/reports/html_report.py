@@ -680,7 +680,7 @@ def render_html_report(report: dict[str, Any]) -> str:
             <div class="eli5-hint">How much of the evaluation we could complete</div>
           </div>
         </div>
-        {f'<div style="color: #b91c1c; font-size: 0.9em; margin-top: 8px; padding: 8px 12px; background: #fef2f2; border-radius: 8px;"><strong>🚨 Safety Gate Triggered:</strong> A critical check failed (e.g. data leaking between splits, or a very low dimension score). This forces the verdict to "Not Ready" regardless of the overall number.<div class="eli5-hint">Think of it like a car that scores well on comfort but fails the brakes test — it can\\'t be driven until the brakes are fixed.</div></div>' if readiness.get('hard_gate', {}).get('triggered') else ''}
+        {f'<div style="color: #b91c1c; font-size: 0.9em; margin-top: 8px; padding: 8px 12px; background: #fef2f2; border-radius: 8px;"><strong>🚨 Safety Gate Triggered:</strong> A critical check failed (e.g. data leaking between splits, or a very low dimension score). This forces the verdict to "Not Ready" regardless of the overall number.<div class="eli5-hint">Think of it like a car that scores well on comfort but fails the brakes test — it cannot be driven until the brakes are fixed.</div></div>' if readiness.get('hard_gate', {}).get('triggered') else ''}
       </div>
     </div>
     <details style="margin-top: 14px;">

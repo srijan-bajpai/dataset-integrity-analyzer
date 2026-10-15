@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,14 @@ app = FastAPI(
     title="Dataset Integrity Analyzer API",
     version="2.0.0",
     description="Audit image classification datasets for quality, representation, duplication, diversity, and label concerns.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -99,10 +108,14 @@ class WhatIfRequest(BaseModel):
         return value
 
 
-def require_password(x_dia_password: str | None = Header(default=None)) -> None:
+def require_password(
+    x_dia_password: str | None = Header(default=None),
+    token: str | None = Query(default=None),
+) -> None:
+    password = x_dia_password or token
     if settings.environment == "production" and not settings.shared_password:
         raise HTTPException(status_code=503, detail="DIA_SHARED_PASSWORD must be configured for production.")
-    if settings.shared_password and not hmac.compare_digest(x_dia_password or "", settings.shared_password):
+    if settings.shared_password and not hmac.compare_digest(password or "", settings.shared_password):
         raise HTTPException(status_code=401, detail="A valid X-DIA-Password header is required.")
 
 
@@ -227,6 +240,41 @@ def get_dataset(dataset_id: str, db: Session = Depends(get_db)) -> dict[str, Any
         "status": d.status, "created_at": d.created_at.isoformat() if d.created_at else None,
         "runs": [{"id": r.id, "status": r.status, "created_at": r.created_at.isoformat()} for r in d.runs],
     }
+
+
+@app.get("/v1/datasets/{dataset_id}/samples/{sample_ref:path}/image", dependencies=[Depends(require_password)])
+def get_sample_image(
+    dataset_id: str,
+    sample_ref: str,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    dataset = _dataset_or_404(db, dataset_id)
+    storage_root = Path(dataset.storage_path).resolve()
+    sample = (
+        db.query(Sample)
+        .filter(Sample.dataset_id == dataset_id, Sample.sample_ref == sample_ref)
+        .first()
+    )
+    if not sample:
+        raise HTTPException(status_code=404, detail="Sample not found.")
+    file_path = Path(sample.file_path).resolve()
+    try:
+        file_path.relative_to(storage_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="Unsafe file path access.") from exc
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Sample image file missing from storage.")
+    ext = file_path.suffix.lower()
+    media_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+        ".tif": "image/tiff",
+        ".tiff": "image/tiff",
+    }
+    return FileResponse(file_path, media_type=media_types.get(ext, "application/octet-stream"))
 
 
 @app.post("/v1/datasets/{dataset_id}/runs", status_code=202, dependencies=[Depends(require_password)])

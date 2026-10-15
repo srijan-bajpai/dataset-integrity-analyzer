@@ -163,3 +163,30 @@ def test_queued_analysis_can_be_cancelled(client):
     response = client.post(f"/v1/runs/{run_id}/cancel", headers=headers)
     assert response.status_code == 200
     assert response.json()["status"] == "cancelled"
+
+
+def test_sample_image_endpoint(client):
+    headers = {"X-DIA-Password": "test-secret"}
+    uploaded = client.post(
+        "/v1/datasets", headers=headers,
+        files={"file": ("dataset.zip", _dataset_zip(), "application/zip")},
+    )
+    dataset_id = uploaded.json()["id"]
+    # Test image fetch with header auth
+    img_resp = client.get(f"/v1/datasets/{dataset_id}/samples/cats/sample.png/image", headers=headers)
+    assert img_resp.status_code == 200
+    assert img_resp.headers["content-type"] == "image/png"
+    assert len(img_resp.content) > 0
+
+    # Test image fetch with query token auth
+    img_token_resp = client.get(f"/v1/datasets/{dataset_id}/samples/cats/sample.png/image?token=test-secret")
+    assert img_token_resp.status_code == 200
+    assert img_token_resp.headers["content-type"] == "image/png"
+
+    # Test 404 on nonexistent sample
+    missing_resp = client.get(f"/v1/datasets/{dataset_id}/samples/nonexistent.png/image", headers=headers)
+    assert missing_resp.status_code == 404
+
+    # Test 401 on unauthorized image request
+    unauth_resp = client.get(f"/v1/datasets/{dataset_id}/samples/cats/cat1.png/image")
+    assert unauth_resp.status_code == 401
