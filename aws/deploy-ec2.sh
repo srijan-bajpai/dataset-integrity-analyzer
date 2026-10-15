@@ -26,6 +26,20 @@ fi
 APP_DIR="/opt/dia"
 mkdir -p "$APP_DIR"
 
+# 0. Setup Swap for Free Tier instances (e.g. t2.micro / t3.micro with 1GB RAM)
+TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}' || echo 4000000)
+if [ "$TOTAL_MEM_KB" -lt 3000000 ]; then
+    if [ ! -f /swapfile ]; then
+        echo -e "${YELLOW}==> Detected Free Tier / low-memory instance (< 3GB RAM). Creating 2GB swap to prevent OOM...${NC}"
+        fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        echo -e "${GREEN}2GB swap enabled successfully.${NC}"
+    fi
+fi
+
 # 1. Detect OS & Install Docker
 echo -e "\n${YELLOW}==> [1/6] Installing Docker & Docker Compose...${NC}"
 if [ -f /etc/os-release ]; then
