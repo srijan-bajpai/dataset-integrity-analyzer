@@ -22,10 +22,11 @@ class LabelAuditAnalyzer(BaseAnalyzer):
         min_samples = np.min(counts) if len(counts) > 0 else 0
         
         if len(classes) < 2 or min_samples < 2:
-            self.df['label_issue_prob'] = 0.0
+            self.df['label_issue_prob'] = np.nan
             self.df['flag_suspected_mislabel'] = False
-            self.df['predicted_class'] = y_true
-            return {'label_noise_rate': 0.0}
+            self.df['predicted_class'] = None
+            return {'status': 'unavailable', 'label_noise_rate': None,
+                    'reason': 'At least two classes with two samples each are required for out-of-fold review.'}
             
         n_splits = min(5, min_samples)
         cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
@@ -46,10 +47,11 @@ class LabelAuditAnalyzer(BaseAnalyzer):
                     pred_probs[val_idx, c_idx] = probs[:, i]
         except ValueError:
             # Fails if some classes have too few samples for k-fold
-            self.df['label_issue_prob'] = 0.0
+            self.df['label_issue_prob'] = np.nan
             self.df['flag_suspected_mislabel'] = False
-            self.df['predicted_class'] = y_true
-            return {'label_noise_rate': 0.0}
+            self.df['predicted_class'] = None
+            return {'status': 'unavailable', 'label_noise_rate': None,
+                    'reason': 'The cross-validation model could not be fit for this class distribution.'}
             
         # Confident learning simplified approximation:
         # Flag if predicted probability of another class > probability of given class
@@ -76,5 +78,9 @@ class LabelAuditAnalyzer(BaseAnalyzer):
         noise_rate = np.mean(suspected_mislabels)
         
         return {
-            'label_noise_rate': noise_rate
+            'status': 'available', 'label_noise_rate': noise_rate,
+            'suspected_count': int(np.sum(suspected_mislabels)),
+            'sample_count': int(len(y_true)), 'cross_validation_folds': int(n_splits),
+            'method': 'stratified out-of-fold logistic regression on ResNet-18 embeddings',
+            'caveat': 'Disagreements are review signals, not verified label errors; model representation and class ambiguity can cause them.',
         }

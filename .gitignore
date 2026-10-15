@@ -16,6 +16,7 @@ build/
 
 # Datasets
 datasets/
+storage/
 data/
 *.zip
 *.tar

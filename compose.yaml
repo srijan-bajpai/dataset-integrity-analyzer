@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dia
+      POSTGRES_USER: dia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dia -d dia"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    command: ["sh", "-c", "alembic upgrade head && uvicorn dia.api.main:app --host 0.0.0.0 --port 8000"]
+    environment: &dia_environment
+      DIA_ENV: production
+      DIA_DATABASE_URL: postgresql+psycopg2://dia:${POSTGRES_PASSWORD}@db:5432/dia
+      DIA_STORAGE_DIR: /data
+      DIA_SHARED_PASSWORD: ${DIA_SHARED_PASSWORD:?Set DIA_SHARED_PASSWORD in .env}
+      DIA_MAX_SAMPLES: 2000
+    volumes:
+      - dia_data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["python", "-m", "dia.worker"]
+    environment: *dia_environment
+    volumes:
+      - dia_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  dia_data:

@@ -1,27 +1,9 @@
-# DIA Demo 5-Minute Cheatsheet
+# DIA 2.0 Demo Cheatsheet
 
-### 1. Setup (Run Before Demo)
-```bash
-python scripts/download_demo_dataset.py
-python run.py
-```
+1. Start the API and worker from [API_GUIDE.md](API_GUIDE.md).
+2. Upload a two-class image ZIP to `POST /v1/datasets`.
+3. Create an audit with `POST /v1/datasets/{dataset_id}/runs`; optionally pass metadata validation rules, fairness targets, and a sampling rate.
+4. Poll `GET /v1/runs/{run_id}`. When complete, inspect `GET /v1/runs/{run_id}/report` and export per-image results from `GET /v1/runs/{run_id}/samples.csv`.
+5. Explain coverage and uncertainty before interpreting the readiness score. Treat all image-derived or model-based findings as review signals.
 
-### 2. The Pitch (15 seconds)
-"DIA is an automated dataset health auditor. Instead of running 6 different disconnected tools, DIA unifies fairness, quality, and balance into a single sample-level view to catch hidden structural defects before you waste money on training."
-
-### 3. The Execution (30 seconds)
-- Point to `data/demo_dataset` in the sidebar.
-- Click **Run Full Analysis**.
-- "DIA is now extracting deep features, hashing images, and looking for confounds."
-
-### 4. The Reveal (2 minutes)
-- **Score (49/100)**: "The dataset failed the AI Readiness check."
-- **Bias Predictor**: "Our C2 impact predictor estimates an 18% drop in final accuracy if we train on this as-is."
-- **Cross-Dimensional Confound**: "Here is the key novelty. DIA noticed that 'birds' are universally blurrier than 'airplanes'. The model won't learn what a bird looks like; it will learn what a blurry photo looks like."
-
-### 5. The Fix (1 minute)
-- Click the **Recommendations** section.
-- "DIA automatically generated a prioritized punch list: Deduplicate the autos, balance the airplanes, and fix the blurry birds."
-
-### Backup Plan
-No internet for the demo script? Point the UI to `test_data/` instead.
+Do not quote the older demo's fixed accuracy-drop estimate or fixed score. The impact predictor stays unavailable until controlled, held-out validation supports a quantitative estimate.

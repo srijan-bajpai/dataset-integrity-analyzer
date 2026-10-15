@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+__pycache__
+*.py[cod]
+data
+datasets
+test_data
+python_nuget
+storage
+*.db
+*.sqlite
+*.npy
+*.npz
+*.zip

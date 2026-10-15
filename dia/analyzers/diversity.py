@@ -1,54 +1,82 @@
-import pandas as pd
+"""Embedding-based visual coverage and within-class diversity checks."""
+
+from typing import Any
+
 import numpy as np
-from sklearn.cluster import KMeans
+import pandas as pd
 from scipy.stats import entropy
-from sklearn.metrics import pairwise_distances
+from sklearn.cluster import DBSCAN, KMeans
+from sklearn.metrics import pairwise_distances, silhouette_score
+from sklearn.preprocessing import normalize
+
 from .base import BaseAnalyzer
-from typing import Dict, Any
+
 
 class DiversityAnalyzer(BaseAnalyzer):
-    """
-    Measures visual diversity using embeddings clustering.
-    (REQ-41, REQ-42)
-    """
     def __init__(self, df: pd.DataFrame, embeddings: np.ndarray, n_clusters: int = 10):
         super().__init__(df)
-        self.embeddings = embeddings
+        self.embeddings = normalize(np.asarray(embeddings, dtype=np.float32))
         self.n_clusters = n_clusters
-        
-    def run(self) -> Dict[str, Any]:
-        if len(self.embeddings) < self.n_clusters:
-            self.n_clusters = max(1, len(self.embeddings))
-            
-        kmeans = KMeans(n_clusters=self.n_clusters, random_state=42, n_init=10)
-        cluster_labels = kmeans.fit_predict(self.embeddings)
-        
-        self.df['cluster_id'] = cluster_labels
-        
-        # Calculate cluster entropy
-        cluster_counts = pd.Series(cluster_labels).value_counts()
-        probs = cluster_counts / cluster_counts.sum()
-        h_norm = entropy(probs) / np.log(self.n_clusters) if self.n_clusters > 1 else 0.0
-        
-        # Calculate per-class diversity (variance of cluster assignments or embedding variance)
-        class_diversity = {}
-        for c in self.df['ground_truth_class'].unique():
-            idx = self.df['ground_truth_class'] == c
-            if idx.sum() > 1:
-                class_embs = self.embeddings[idx]
-                variance = np.var(class_embs, axis=0).mean()
-                class_diversity[c] = variance
-            else:
-                class_diversity[c] = 0.0
-                
-        # Mean pairwise distance over a random sample (for performance)
-        sample_size = min(1000, len(self.embeddings))
-        sampled_embs = self.embeddings[np.random.choice(len(self.embeddings), sample_size, replace=False)]
-        distances = pairwise_distances(sampled_embs, metric='cosine')
-        mean_pairwise_dist = np.mean(distances[np.triu_indices(sample_size, k=1)]) if sample_size > 1 else 0.0
-        
+
+    def run(self) -> dict[str, Any]:
+        n = len(self.embeddings)
+        if n != len(self.df) or n < 2:
+            raise ValueError("At least two aligned image embeddings are required.")
+        max_k = min(self.n_clusters, n - 1, 10)
+        rng = np.random.default_rng(42)
+        sample_indices = rng.choice(n, min(n, 1000), replace=False)
+        candidates = []
+        for k in range(2, max_k + 1):
+            labels = KMeans(n_clusters=k, random_state=42, n_init=10).fit_predict(self.embeddings)
+            if len(np.unique(labels)) < 2:
+                continue
+            sampled_labels = labels[sample_indices]
+            if len(np.unique(sampled_labels)) < 2:
+                continue
+            score = float(silhouette_score(self.embeddings[sample_indices], sampled_labels, metric="cosine"))
+            candidates.append((score, k, labels))
+        if candidates:
+            best_silhouette, selected_k, cluster_labels = max(candidates, key=lambda item: (item[0], -item[1]))
+            silhouette_status = "available"
+        else:
+            selected_k = min(2, n)
+            cluster_labels = KMeans(n_clusters=selected_k, random_state=42, n_init=10).fit_predict(self.embeddings)
+            best_silhouette, silhouette_status = None, "unavailable"
+        self.df["cluster_id"] = cluster_labels
+        counts = pd.Series(cluster_labels).value_counts().sort_index()
+        probs = counts / counts.sum()
+        cluster_entropy = float(entropy(probs) / np.log(selected_k)) if selected_k > 1 else 0.0
+
+        class_results: dict[str, Any] = {}
+        if "ground_truth_class" in self.df:
+            for label in sorted(self.df["ground_truth_class"].dropna().astype(str).unique()):
+                indices = np.flatnonzero(self.df["ground_truth_class"].astype(str).to_numpy() == label)
+                class_embs = self.embeddings[indices]
+                class_clusters = cluster_labels[indices]
+                class_counts = pd.Series(class_clusters).value_counts()
+                normalized_entropy = float(entropy(class_counts / len(indices)) / np.log(selected_k)) if len(indices) > 1 and selected_k > 1 else 0.0
+                pairwise = pairwise_distances(class_embs, metric="cosine")
+                mean_distance = float(pairwise[np.triu_indices(len(indices), k=1)].mean()) if len(indices) > 1 else 0.0
+                class_results[label] = {
+                    "sample_count": int(len(indices)),
+                    "cluster_entropy": normalized_entropy,
+                    "mean_pairwise_cosine_distance": mean_distance,
+                    "low_diversity": len(indices) < 5 or normalized_entropy < 0.2,
+                }
+        dbscan_labels = DBSCAN(eps=0.5, min_samples=5, metric="cosine", n_jobs=-1).fit_predict(self.embeddings)
+        dbscan_clusters = sorted(set(int(v) for v in dbscan_labels if v >= 0))
+        distances = pairwise_distances(self.embeddings[sample_indices], metric="cosine")
+        mean_pairwise = float(distances[np.triu_indices(len(sample_indices), k=1)].mean()) if len(sample_indices) > 1 else 0.0
         return {
-            'cluster_entropy': h_norm,
-            'mean_pairwise_distance': mean_pairwise_dist,
-            'per_class_embedding_variance': class_diversity
+            "status": "available",
+            "cluster_entropy": cluster_entropy,
+            "selected_k": int(selected_k),
+            "k_selection": "maximum cosine silhouette over k=2..min(10,n-1)",
+            "silhouette_score": best_silhouette,
+            "silhouette_status": silhouette_status,
+            "dbscan": {"eps_cosine": 0.5, "min_samples": 5, "cluster_count": len(dbscan_clusters),
+                       "noise_count": int(np.sum(dbscan_labels == -1))},
+            "mean_pairwise_cosine_distance": mean_pairwise,
+            "per_class": class_results,
+            "low_diversity_classes": [key for key, value in class_results.items() if value["low_diversity"]],
         }

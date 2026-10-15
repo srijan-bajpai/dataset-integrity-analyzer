@@ -1,67 +1,69 @@
-from typing import Dict, List
+"""Plain, evidence-linked remediation suggestions."""
+
+from typing import Any
+
 
 class RecommendationEngine:
-    """
-    Generates actionable recommendations based on the aggregated metrics and confounds.
-    (REQ-68, REQ-69, REQ-70)
-    """
-    def __init__(self, agg_results: dict):
+    def __init__(self, agg_results: dict[str, Any]):
         self.agg = agg_results
-        
-    def generate(self) -> List[Dict[str, str]]:
-        recs = []
-        
-        # 1. Imbalance
-        ir = self.agg.get('distribution', {}).get('imbalance_ratio', 1.0)
-        if ir > 3.0:
+
+    def generate(self) -> list[dict[str, str]]:
+        recs: list[dict[str, str]] = []
+        fairness = self.agg.get("fairness", {})
+        for finding in fairness.get("findings", []):
             recs.append({
-                'priority': 'High',
-                'category': 'Balance',
-                'action': f"Rebalance classes. The dataset is heavily imbalanced (ratio {ir:.1f}:1). Consider collecting more minority class samples or applying severe undersampling.",
+                "priority": "High" if finding.get("severity") == "warning" else "Review",
+                "category": "Group representation",
+                "evidence": finding.get("code", "GROUP_REPRESENTATION_GAP"),
+                "action": "Review collection and sampling for this group against the target you supplied. Confirm that the target reflects the intended use before changing the dataset.",
             })
-            
-        # 2. Quality
-        pct_blur = self.agg.get('quality', {}).get('pct_blurred', 0)
-        if pct_blur > 5.0:
+
+        distribution = self.agg.get("distribution", {})
+        ratio = distribution.get("imbalance_ratio")
+        if ratio is not None and ratio > 3:
             recs.append({
-                'priority': 'Medium',
-                'category': 'Quality',
-                'action': f"Remove or enhance blurry images. {pct_blur:.1f}% of samples fail the variance of Laplacian threshold."
+                "priority": "High" if ratio > 10 else "Medium", "category": "Class balance",
+                "evidence": f"Majority-to-minority ratio is {ratio:.2f}:1.",
+                "action": "Review whether the class counts match the intended task. Consider collecting minority examples or using a documented sampling strategy.",
             })
-            
-        # 3. Duplicates
-        redundancy = self.agg.get('duplicates', {}).get('redundancy_ratio', 0)
-        if redundancy > 0.05:
+
+        quality = self.agg.get("quality", {})
+        defects = quality.get("defect_rate_pct")
+        if defects is not None and defects >= 5:
             recs.append({
-                'priority': 'High',
-                'category': 'Uniqueness',
-                'action': f"Deduplicate dataset. Found a {redundancy*100:.1f}% redundancy rate which will leak train/test data or cause overfitting."
+                "priority": "Medium", "category": "Image quality",
+                "evidence": f"{defects:.1f}% of readable images failed at least one quality check.",
+                "action": "Review flagged images and compare quality across classes and groups before removing or altering samples.",
             })
-            
-        # 4. Labels
-        noise = self.agg.get('labels', {}).get('label_noise_rate', 0)
-        if noise > 0.05:
+
+        duplicates = self.agg.get("duplicates", {})
+        if duplicates.get("near_duplicate_count", 0):
             recs.append({
-                'priority': 'High',
-                'category': 'Label Integrity',
-                'action': f"Review suspected mislabels. Confident learning flagged {noise*100:.1f}% of labels as highly suspicious."
+                "priority": "High" if duplicates.get("cross_split_duplicate_groups", 0) else "Medium",
+                "category": "Duplicates",
+                "evidence": f"{duplicates['near_duplicate_count']} redundant image(s); {duplicates.get('cross_split_duplicate_groups', 0)} group(s) cross splits.",
+                "action": "Review duplicate groups and keep related images in the same data split to reduce evaluation leakage.",
             })
-            
-        # 5. Confounds
-        confounds = self.agg.get('confounds', {}).get('detected_confounds', [])
-        for c in confounds:
+
+        for finding in self.agg.get("metadata", {}).get("findings", []):
+            if finding.get("code") == "METADATA_MISSING_VALUES":
+                recs.append({
+                    "priority": "Medium", "category": "Metadata quality",
+                    "evidence": finding.get("description", "Missing attribute values were found."),
+                    "action": "Check the source manifest and correct missing values where reliable labels are available. Keep unknown values explicitly unknown.",
+                })
+
+        for finding in self.agg.get("confounds", {}).get("detected_confounds", []):
             recs.append({
-                'priority': 'Critical',
-                'category': 'Cross-Dimensional Confound',
-                'action': f"Investigate Confound: {c['description']}. This is a critical structural issue that standard metric tracking will not catch."
+                "priority": "Review", "category": "Cross-dimension finding",
+                "evidence": finding.get("description", finding.get("type", "A group difference was found.")),
+                "action": "Inspect the affected samples and group summaries. Treat this result as a signal to investigate, not proof of causation.",
             })
-            
-        # 6. Overall Readiness fallback
+
         if not recs:
             recs.append({
-                'priority': 'Low',
-                'category': 'General',
-                'action': "Dataset appears healthy across all standard checks. Proceed to training."
+                "priority": "Info", "category": "Review",
+                "evidence": "No configured finding thresholds were crossed.",
+                "action": "Review sample counts and dimensions marked unavailable before deciding the dataset is ready.",
             })
-            
         return recs

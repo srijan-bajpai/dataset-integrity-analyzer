@@ -30,7 +30,7 @@ class FeatureExtractor:
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
         
-    def extract(self, output_path: str = "embeddings.npy") -> np.ndarray:
+    def extract(self, output_path: str = "embeddings.npy", progress_callback=None) -> np.ndarray:
         embeddings = []
         paths = self.df['path'].tolist()
         
@@ -38,6 +38,8 @@ class FeatureExtractor:
         
         with torch.no_grad():
             for i in range(0, len(paths), self.batch_size):
+                if progress_callback:
+                    progress_callback(45 + int(25 * i / max(len(paths), 1)), f"Extracting image embeddings ({min(i + self.batch_size, len(paths))}/{len(paths)})")
                 batch_paths = paths[i:i+self.batch_size]
                 batch_tensors = []
                 valid_indices = []
@@ -61,7 +63,11 @@ class FeatureExtractor:
                 embeddings.append(out.cpu().numpy())
                 
         all_embeddings = np.vstack(embeddings)
-        np.save(output_path, all_embeddings)
-        self.df['embedding_ref'] = output_path
+        output = Path(output_path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        np.save(output, all_embeddings)
+        self.df['embedding_ref'] = str(output)
+        if progress_callback:
+            progress_callback(70, "Image embeddings complete")
         
         return all_embeddings

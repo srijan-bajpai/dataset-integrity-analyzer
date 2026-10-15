@@ -6,9 +6,11 @@ import csv
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import zipfile
+import warnings as py_warnings
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -27,6 +29,8 @@ def safe_extract_zip(archive: Path, destination: Path) -> None:
     max_bytes = settings.max_extracted_size_mb * 1024 * 1024
     total = 0
     with zipfile.ZipFile(archive) as zf:
+        if len(zf.infolist()) > settings.max_samples * 5 + 256:
+            raise DatasetValidationError("The archive contains too many entries for the configured dataset limit.")
         for info in zf.infolist():
             name = info.filename.replace("\\", "/")
             rel = PurePosixPath(name)
@@ -48,8 +52,16 @@ def safe_extract_zip(archive: Path, destination: Path) -> None:
                 target.mkdir(parents=True, exist_ok=True)
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
+            member_bytes = 0
             with zf.open(info) as source, target.open("wb") as output:
-                shutil.copyfileobj(source, output, length=1024 * 1024)
+                while block := source.read(1024 * 1024):
+                    member_bytes += len(block)
+                    if member_bytes > settings.max_member_size_mb * 1024 * 1024:
+                        raise DatasetValidationError(f"Archive member exceeds the per-file limit: {info.filename}")
+                    output.write(block)
+            total += member_bytes - info.file_size
+            if total > max_bytes:
+                raise DatasetValidationError("The expanded archive exceeds the configured size limit.")
 
 
 def _unwrap_single_directory(root: Path) -> Path:
@@ -74,6 +86,20 @@ def _attributes(row: dict[str, Any], reserved: set[str]) -> dict[str, Any]:
     }
 
 
+def _filename_attributes(path: Path) -> dict[str, Any]:
+    """Parse deterministic UTKFace-style filename fields as low-risk metadata."""
+    match = re.match(r"^(\d{1,3})_([01])_([0-4])_", path.stem)
+    if not match:
+        return {}
+    age = int(match.group(1))
+    gender_code = int(match.group(2))
+    race_code = int(match.group(3))
+    age_band = "0-12" if age <= 12 else "13-19" if age <= 19 else "20-29" if age <= 29 else "30-39" if age <= 39 else "40-49" if age <= 49 else "50-59" if age <= 59 else "60+"
+    values = {"age": age, "age_band": age_band, "gender": "male" if gender_code == 0 else "female",
+              "race": {0: "white", 1: "black", 2: "asian", 3: "indian", 4: "other"}[race_code]}
+    return {key: {"value": value, "confidence": 1.0, "provenance": "filename"} for key, value in values.items()}
+
+
 def _parse_manifest(root: Path, manifest: Path) -> list[dict[str, Any]]:
     reserved = {"image_path", "path", "image", "label", "ground_truth_class", "split"}
     rows: list[dict[str, Any]] = []
@@ -89,6 +115,8 @@ def _parse_manifest(root: Path, manifest: Path) -> list[dict[str, Any]]:
     if not source_rows:
         raise DatasetValidationError("The manifest contains no samples.")
     for i, row in enumerate(source_rows, start=1):
+        if not isinstance(row, dict):
+            raise DatasetValidationError(f"Manifest row {i} must be an object with named fields.")
         image_ref = row.get("image_path") or row.get("path") or row.get("image")
         if not isinstance(image_ref, str) or not image_ref.strip():
             raise DatasetValidationError(f"Manifest row {i} has no image_path.")
@@ -108,6 +136,7 @@ def _parse_manifest(root: Path, manifest: Path) -> list[dict[str, Any]]:
             "ground_truth_class": str(label).strip() if label not in (None, "") else None,
             "split": str(split).strip().lower(),
             "attributes": _attributes(row, reserved),
+            "inferred_attributes": _filename_attributes(image_path),
         })
     return rows
 
@@ -116,6 +145,8 @@ def parse_dataset(root: Path) -> tuple[str, list[dict[str, Any]], list[str]]:
     """Return layout, sample records, and ingestion warnings for a dataset root."""
     root = _unwrap_single_directory(root.resolve())
     manifests = [p for p in root.iterdir() if p.is_file() and p.name.lower() in {"metadata.csv", "manifest.csv", "metadata.jsonl", "manifest.jsonl", "metadata.ndjson", "manifest.ndjson"}]
+    if len(manifests) > 1:
+        raise DatasetValidationError("Provide only one metadata.csv, manifest.csv, metadata.jsonl, manifest.jsonl, metadata.ndjson, or manifest.ndjson file.")
     if manifests:
         records = _parse_manifest(root, manifests[0])
         layout = "manifest"
@@ -137,11 +168,15 @@ def parse_dataset(root: Path) -> tuple[str, list[dict[str, Any]], list[str]]:
             records.append({
                 "sample_ref": rel.as_posix(), "path": str(image),
                 "ground_truth_class": label, "split": split, "attributes": {},
+                "inferred_attributes": _filename_attributes(image),
             })
         layout = "folder_per_class"
 
     if not records:
         raise DatasetValidationError("No supported image samples were found.")
+    refs = [record["sample_ref"] for record in records]
+    if len(set(refs)) != len(refs):
+        raise DatasetValidationError("The dataset contains duplicate sample paths; each manifest row must refer to a unique image path.")
     if len(records) > settings.max_samples:
         raise DatasetValidationError(f"Dataset contains {len(records)} images; the limit is {settings.max_samples}.")
 
@@ -151,22 +186,53 @@ def parse_dataset(root: Path) -> tuple[str, list[dict[str, Any]], list[str]]:
         path = Path(record["path"])
         record["content_sha256"] = _sha256(path)
         try:
-            with Image.open(path) as image:
-                image.verify()
+            with py_warnings.catch_warnings():
+                py_warnings.simplefilter("error", Image.DecompressionBombWarning)
+                with Image.open(path) as image:
+                    image.verify()
+                with Image.open(path) as image:
+                    gray = image.convert("L")
+                    extrema = gray.getextrema()
+                    record["anomaly_flags"] = [
+                        flag for condition, flag in (
+                            (extrema == (0, 0), "all_black"),
+                            (extrema == (255, 255), "all_white"),
+                            (extrema[0] == extrema[1], "zero_variance"),
+                        ) if condition
+                    ]
             record["is_valid"] = True
             valid_count += 1
-        except (UnidentifiedImageError, OSError, ValueError) as exc:
+        except (UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning, OSError, ValueError) as exc:
             record["is_valid"] = False
             record["error_message"] = f"Unreadable image: {type(exc).__name__}"
             warnings.append(f"{record['sample_ref']}: unreadable image")
     if valid_count == 0:
         raise DatasetValidationError("No readable image files were found.")
+    classes_with_readable_images = {r["ground_truth_class"] for r in records if r.get("is_valid") and r.get("ground_truth_class")}
+    classes_in_manifest = {r["ground_truth_class"] for r in records if r.get("ground_truth_class")}
+    classes_without_readable_images = sorted(classes_in_manifest - classes_with_readable_images)
+    if classes_without_readable_images:
+        warnings.append(f"These classes contain no readable images and will be absent from image analyses: {classes_without_readable_images}.")
     labeled = [r for r in records if r["ground_truth_class"]]
     if not labeled:
         warnings.append("No class labels were found; label and class-balance checks will be unavailable.")
+    elif len(labeled) < len(records):
+        warnings.append(f"{len(records) - len(labeled)} sample(s) have no class label.")
     elif len({r["ground_truth_class"] for r in labeled}) < 2:
         warnings.append("Only one class label was found; class comparisons will be limited.")
     return layout, records, warnings
+
+
+def dataset_fingerprint(root: Path, records: list[dict[str, Any]]) -> str:
+    """Stable fingerprint from sorted sample paths and byte sizes."""
+    digest = hashlib.sha256()
+    for record in sorted(records, key=lambda item: item["sample_ref"]):
+        path = Path(record["path"])
+        digest.update(record["sample_ref"].encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(path.stat().st_size).encode("ascii"))
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def _sha256(path: Path) -> str:

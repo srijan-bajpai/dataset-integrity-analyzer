@@ -14,7 +14,7 @@ _SessionFactory = None
 def _ensure_init():
     global _engine, _SessionFactory
     if _engine is None:
-        _engine = init_db(settings.DATABASE_URL)
+        _engine = init_db(settings.database_url)
         _SessionFactory = get_session_factory(_engine)
 
 

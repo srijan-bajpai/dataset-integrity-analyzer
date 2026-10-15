@@ -42,3 +42,18 @@ The MVP is for your course project and a personal hosted demo. It supports datas
 - ZIP is the API upload container; class folders and CSV/JSONL manifests are the supported layouts.
 - Audit results are evidence and review signals. The project will not claim to prove that a dataset or model is fair.
 - Frontend work is deferred until the backend contract and report format are stable.
+
+## Current implementation status and agent handoff
+
+This plan is being implemented on the `dia_2.0_codex` branch. The API, database-backed run lifecycle, safe ZIP ingestion, core audits, versioned JSON report, sample CSV export, cancellation, comparison, and local/hosted setup are present. Do not interpret that as full SRS completion: research-dependent or report-format work must stay visibly unavailable until validated. The requirement-by-requirement status and remaining work are maintained in [docs/SRS_TRACEABILITY.md](docs/SRS_TRACEABILITY.md).
+
+For any IDE or AI agent continuing this work:
+
+1. Start with `docs/SRS_TRACEABILITY.md`, the SRS PDF under `srs/`, `docs/API_GUIDE.md`, and the automated tests under `tests/`.
+2. Preserve existing local/user data and run in the current feature branch. Do not commit unless the project owner asks.
+3. Keep unvalidated face-demographic inference, BRISQUE, confidence-impact estimates, and other model-dependent claims marked unavailable. Do not replace unavailable values with zero.
+4. Add known-answer fixtures for changes to thresholds, sampling, confidence, grouping, or score formulas. Keep analyzer versions and formulas in reports.
+5. Run `python -m pytest -q` and `python -m alembic upgrade head` after backend changes. Use a Docker-capable host to validate deployment because Docker is not installed in the development environment used for this pass.
+6. Keep frontend work deferred until the API and report schema are accepted. The current Streamlit app is a legacy demo surface, not the v2 client.
+
+The predictor-validation study, dedicated face attribute models, full confident-learning/outlier validation, cached reruns, what-if scoring, complete recommendation manifests, PDF/HTML/model-card artifacts, frontend, and deployment smoke test remain explicitly open. See the traceability file for the acceptance boundaries; none should be described in a resume or demo as completed until its validation and checks pass.

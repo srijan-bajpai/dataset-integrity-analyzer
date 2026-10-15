@@ -18,7 +18,7 @@ from dia.core.orchestrator import DIAOrchestrator
 st.set_page_config(page_title="Dataset Integrity Analyzer", layout="wide")
 
 st.title("Dataset Integrity Analyzer (DIA)")
-st.markdown("Automated Dataset Health Auditing and Bias Impact Prediction")
+st.markdown("Legacy local demo interface; use the DIA 2.0 API for database-backed audits")
 
 st.sidebar.header("Dataset Configuration")
 dataset_path = st.sidebar.text_input("Local Dataset Path", value="data/demo_dataset", help="Path to a folder-per-class image dataset.")
@@ -67,6 +67,8 @@ if st.sidebar.button("Run Full Analysis"):
 def _readiness_conclusion(score, verdict, sub_scores):
     """Return a plain-language summary of the AI Readiness Score."""
     weak = [k for k, v in sub_scores.items() if v < 50]
+    if verdict == "Insufficient Coverage":
+        return "Too few audit dimensions were available for a readiness verdict. Review unavailable checks and provide metadata or image labels where appropriate."
     if score > 85:
         return "This dataset is in strong shape overall. All dimensions score well, and the dataset is suitable for production model training without major remediation."
     elif score > 70:
@@ -94,12 +96,14 @@ if st.session_state.analysis_complete:
     score = res['readiness']['overall_score']
     verdict = res['readiness']['verdict']
     sub_scores = res['readiness']['sub_scores']
+    score_coverage = res['readiness'].get('coverage_pct', 100)
     
     col1, col2 = st.columns([1, 2])
     with col1:
         color = "green" if score > 80 else "orange" if score > 50 else "red"
         st.markdown(f"<h1 style='text-align: center; color: {color}; font-size: 5em;'>{score}</h1>", unsafe_allow_html=True)
         st.markdown(f"<h3 style='text-align: center;'>{verdict}</h3>", unsafe_allow_html=True)
+        st.caption(f"Scored coverage: {score_coverage:.0f}%")
         
     with col2:
         # Radar Chart for sub-scores
@@ -109,7 +113,7 @@ if st.session_state.analysis_complete:
         # Map dimension names to plain-language hover descriptions
         dim_explanations = {
             'Balance': 'How evenly samples are distributed across classes (100 = perfectly even)',
-            'Fairness': 'Whether demographic groups are represented fairly (placeholder in prototype)',
+            'Fairness': 'Group representation compared with targets you provide; without a target this dimension is not scored',
             'Quality': 'Image sharpness, exposure, and contrast (100 = no defects found)',
             'Uniqueness': 'How free the dataset is from duplicate images (100 = no duplicates)',
             'Diversity': 'How visually varied the images are (100 = maximum variety)',
@@ -135,37 +139,13 @@ if st.session_state.analysis_complete:
     # ------------------------------------------------------------------ #
     # 2. Bias Impact Prediction
     # ------------------------------------------------------------------ #
-    st.header("2. Bias Impact Predictor")
+    st.header("2. Accuracy Impact Estimate")
     impact = res.get('bias_impact', {})
-    
-    drop = impact.get('expected_accuracy_drop_pct', 0)
-    worst = impact.get('interval_high', 0)
-    confound_count = impact.get('features', {}).get('confound_count', 0)
-    confound_penalty = confound_count * 3
-
-    i_col1, i_col2, i_col3 = st.columns(3)
-    i_col1.metric("Predicted Accuracy Drop", f"-{drop}%",
-                  help="How much worse your model's test accuracy is expected to be compared to training on an ideal, defect-free version of this dataset.")
-    i_col2.metric("Worst-Case Drop", f"-{worst}%",
-                  help="The upper bound of the prediction interval. In a pessimistic scenario, accuracy could drop by this much.")
-    i_col3.metric("Confound Penalty", f"{confound_penalty}%",
-                  help="Extra accuracy loss caused specifically by overlapping issues (confounds). Each detected confound adds roughly 3% to the predicted drop.")
-
-    # Dynamic conclusion based on the numbers
-    if drop < 3:
-        bias_conclusion = f"The dataset's structural issues are expected to have negligible impact on model accuracy (predicted drop of only {drop}%). The model should train to near-optimal performance on this data."
-    elif drop < 15:
-        bias_conclusion = f"Training a model on this dataset is predicted to reduce test accuracy by approximately {drop}% compared to a clean baseline. "
-        if confound_count > 0:
-            bias_conclusion += f"Of this, roughly {confound_penalty}% is caused by {confound_count} overlapping structural issue(s) where different problems reinforce each other. "
-        bias_conclusion += "This is a moderate impact worth addressing before production use."
+    if impact.get("is_validated") and impact.get("expected_accuracy_drop_pct") is not None:
+        st.metric("Validated estimated accuracy change", f"-{impact['expected_accuracy_drop_pct']}%")
+        st.caption("This estimate is available only for dataset conditions covered by the validation benchmark.")
     else:
-        bias_conclusion = f"This dataset is predicted to cause a significant accuracy drop of approximately {drop}% (worst case {worst}%). "
-        if confound_count > 0:
-            bias_conclusion += f"A portion of this ({confound_penalty}%) stems from {confound_count} structural confound(s) where different dataset flaws overlap and compound each other. "
-        bias_conclusion += "Remediating the issues flagged below is strongly recommended before training."
-
-    st.info(bias_conclusion)
+        st.info("A training-impact estimate is unavailable because DIA has no validated impact model yet. Review the measured dataset findings below.")
 
     st.divider()
     
@@ -176,7 +156,7 @@ if st.session_state.analysis_complete:
 
     confounds = res.get('confounds', {}).get('detected_confounds', [])
     if not confounds:
-        st.success("No cross-dimensional confounds detected. Each quality dimension appears to vary independently of the others, which is a healthy sign.")
+        st.info("No configured association crossed the current screening thresholds. This does not establish that dataset dimensions are independent.")
     else:
         for c in confounds:
             ctype = c['type']

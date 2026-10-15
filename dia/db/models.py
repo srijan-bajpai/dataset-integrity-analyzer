@@ -7,9 +7,15 @@ Tracks: datasets, samples, attributes, analysis runs, metrics, and findings.
 import uuid
 import datetime
 from sqlalchemy import Column, String, Integer, Float, Boolean, Text, DateTime, ForeignKey, JSON, Index, create_engine
+from sqlalchemy import PrimaryKeyConstraint
+from sqlalchemy import event
 from sqlalchemy.orm import relationship, declarative_base, sessionmaker
 
 Base = declarative_base()
+
+
+def utcnow():
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
 def generate_uuid() -> str:
@@ -24,7 +30,8 @@ class Dataset(Base):
     name = Column(String, nullable=False)
     description = Column(Text, default="")
     layout = Column(String, default="folder_per_class")  # folder_per_class | manifest
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    fingerprint = Column(String, nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     sample_count = Column(Integer, default=0)
     class_count = Column(Integer, default=0)
     classes = Column(JSON, default=list)  # list of class names
@@ -51,6 +58,7 @@ class Sample(Base):
     # Metadata / attributes (from manifest or inferred)
     attributes = Column(JSON, default=dict)  # user-supplied attributes
     inferred_attributes = Column(JSON, default=dict)  # opt-in model suggestions
+    anomaly_flags = Column(JSON, default=list)
 
     # Quality metrics (filled by analyzers)
     quality_blur = Column(Float, nullable=True)
@@ -83,6 +91,7 @@ class Sample(Base):
     error_message = Column(String, nullable=True)
 
     dataset = relationship("Dataset", back_populates="samples")
+    analysis_results = relationship("SampleResult", back_populates="sample", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_samples_dataset", "dataset_id"),
@@ -98,9 +107,11 @@ class AnalysisRun(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     dataset_id = Column(String, ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False)
     status = Column(String, default="queued")  # queued | running | completed | failed
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    progress_percent = Column(Integer, default=0, nullable=False)
+    status_message = Column(String, default="Queued", nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
 
     # Configuration
@@ -117,6 +128,8 @@ class AnalysisRun(Base):
     duration_seconds = Column(Float, nullable=True)
 
     dataset = relationship("Dataset", back_populates="runs")
+    jobs = relationship("JobQueue", back_populates="run", cascade="all, delete-orphan")
+    sample_results = relationship("SampleResult", back_populates="run", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_runs_dataset", "dataset_id"),
@@ -130,11 +143,12 @@ class JobQueue(Base):
 
     id = Column(String, primary_key=True, default=generate_uuid)
     run_id = Column(String, ForeignKey("analysis_runs.id", ondelete="CASCADE"), nullable=False, unique=True)
+    run = relationship("AnalysisRun", back_populates="jobs")
     status = Column(String, default="pending")  # pending | processing | done | failed
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     picked_at = Column(DateTime, nullable=True)
-    lease_expires_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
     worker_id = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
 
@@ -143,12 +157,36 @@ class JobQueue(Base):
     )
 
 
+class SampleResult(Base):
+    """Versioned per-sample measurements for a particular analysis run."""
+    __tablename__ = "sample_results"
+
+    run_id = Column(String, ForeignKey("analysis_runs.id", ondelete="CASCADE"), nullable=False)
+    sample_id = Column(String, ForeignKey("samples.id", ondelete="CASCADE"), nullable=False)
+    metrics = Column(JSON, default=dict, nullable=False)
+
+    run = relationship("AnalysisRun", back_populates="sample_results")
+    sample = relationship("Sample", back_populates="analysis_results")
+
+    __table_args__ = (
+        PrimaryKeyConstraint("run_id", "sample_id", name="pk_sample_results"),
+        Index("ix_sample_results_sample", "sample_id"),
+    )
+
+
 def get_engine(database_url: str):
     """Create a SQLAlchemy engine."""
     connect_args = {}
     if database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
-    return create_engine(database_url, connect_args=connect_args, echo=False)
+    engine = create_engine(database_url, connect_args=connect_args, echo=False, pool_pre_ping=True)
+    if database_url.startswith("sqlite"):
+        @event.listens_for(engine, "connect")
+        def _enable_sqlite_foreign_keys(connection, _record):
+            cursor = connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+    return engine
 
 
 def get_session_factory(engine):
