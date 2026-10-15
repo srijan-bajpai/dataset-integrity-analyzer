@@ -4,7 +4,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
 
-revision = "0003_fingerprint_and_ingestion_metadata"
+revision = "0003_fingerprint_metadata"
 down_revision = "0002_progress_and_sample_results"
 branch_labels = None
 depends_on = None
