@@ -1,0 +1,570 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Dataset Integrity Analyzer (DIA) 2.0 - Complete AWS Production Stack (ALB + ECS Fargate + RDS PostgreSQL + Amazon EFS)'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dia-production
+    Description: Environment prefix for all provisioned AWS resources
+
+  ContainerImage:
+    Type: String
+    Description: ECR URI for the DIA image (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/dia:latest)
+
+  DiaSharedPassword:
+    Type: String
+    NoEcho: true
+    Description: Secret studio password for DIA web UI authentication and API access
+    MinLength: 8
+
+  DatabasePassword:
+    Type: String
+    NoEcho: true
+    Description: Password for the PostgreSQL database administrator (user 'dia')
+    MinLength: 8
+
+  DatabaseInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    Description: RDS PostgreSQL instance type (e.g. db.t4g.micro, db.t4g.small)
+
+  ApiTaskCpu:
+    Type: String
+    Default: '1024'
+    Description: CPU units for the API task (1024 = 1 vCPU)
+
+  ApiTaskMemory:
+    Type: String
+    Default: '2048'
+    Description: Memory in MB for the API task
+
+  WorkerTaskCpu:
+    Type: String
+    Default: '2048'
+    Description: CPU units for the Analysis Worker task (2048 = 2 vCPUs)
+
+  WorkerTaskMemory:
+    Type: String
+    Default: '4096'
+    Description: Memory in MB for the Analysis Worker task
+
+  AcmCertificateArn:
+    Type: String
+    Default: ''
+    Description: Optional AWS Certificate Manager (ACM) ARN for HTTPS (leave empty for HTTP port 80 only)
+
+Conditions:
+  HasAcmCertificate: !Not [!Equals [!Ref AcmCertificateArn, '']]
+
+Resources:
+  # ========================================================
+  # Networking: VPC, Subnets, Internet Gateway
+  # ========================================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-vpc'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-igw'
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-a'
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-b'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  # ========================================================
+  # Security Groups
+  # ========================================================
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for DIA Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-alb-sg'
+
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for DIA ECS Fargate Tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ecs-sg'
+
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for DIA RDS PostgreSQL
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EcsSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-rds-sg'
+
+  EfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for DIA shared EFS storage
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref EcsSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-efs-sg'
+
+  # ========================================================
+  # Amazon EFS: Shared Persistent Storage across Containers
+  # ========================================================
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-efs'
+
+  MountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Ref PublicSubnetA
+      SecurityGroups:
+        - !Ref EfsSecurityGroup
+
+  MountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref EfsSecurityGroup
+
+  EfsAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref FileSystem
+      PosixUser:
+        Uid: '0'
+        Gid: '0'
+      RootDirectory:
+        CreationInfo:
+          OwnerGid: '0'
+          OwnerUid: '0'
+          Permissions: '777'
+        Path: '/data'
+      AccessPointTags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ap'
+
+  # ========================================================
+  # Amazon RDS: PostgreSQL 16
+  # ========================================================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for DIA PostgreSQL database
+      SubnetIds:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-db-subnets'
+
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-db'
+      Engine: postgres
+      EngineVersion: '16.3'
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      AllocatedStorage: '20'
+      StorageType: gp3
+      DBName: dia
+      MasterUsername: dia
+      MasterUserPassword: !Ref DatabasePassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-db'
+
+  # ========================================================
+  # CloudWatch Logs & IAM Roles
+  # ========================================================
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EnvironmentName}-api'
+      RetentionInDays: 14
+
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EnvironmentName}-worker'
+      RetentionInDays: 14
+
+  EcsTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  EcsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DiaEfsClientPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:ClientWrite
+                  - elasticfilesystem:ClientRootAccess
+                Resource: !GetAtt FileSystem.Arn
+
+  # ========================================================
+  # ECS Cluster & Task Definitions
+  # ========================================================
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${EnvironmentName}-cluster'
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+
+  ApiTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - MountTargetA
+      - MountTargetB
+    Properties:
+      Family: !Sub '${EnvironmentName}-api'
+      Cpu: !Ref ApiTaskCpu
+      Memory: !Ref ApiTaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+      Volumes:
+        - Name: dia-shared-storage
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref FileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref EfsAccessPoint
+              IAM: ENABLED
+      ContainerDefinitions:
+        - Name: dia-api
+          Image: !Ref ContainerImage
+          Essential: true
+          Command: ["api"]
+          PortMappings:
+            - ContainerPort: 8000
+              Protocol: tcp
+          MountPoints:
+            - SourceVolume: dia-shared-storage
+              ContainerPath: /data
+              ReadOnly: false
+          Environment:
+            - Name: DIA_ENV
+              Value: production
+            - Name: DIA_STORAGE_DIR
+              Value: /data
+            - Name: DIA_SHARED_PASSWORD
+              Value: !Ref DiaSharedPassword
+            - Name: DIA_DATABASE_URL
+              Value: !Sub 'postgresql+psycopg2://dia:${DatabasePassword}@${DBInstance.Endpoint.Address}:${DBInstance.Endpoint.Port}/dia'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApiLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: api
+          HealthCheck:
+            Command: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 20
+
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - MountTargetA
+      - MountTargetB
+    Properties:
+      Family: !Sub '${EnvironmentName}-worker'
+      Cpu: !Ref WorkerTaskCpu
+      Memory: !Ref WorkerTaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+      Volumes:
+        - Name: dia-shared-storage
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref FileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref EfsAccessPoint
+              IAM: ENABLED
+      ContainerDefinitions:
+        - Name: dia-worker
+          Image: !Ref ContainerImage
+          Essential: true
+          Command: ["worker"]
+          MountPoints:
+            - SourceVolume: dia-shared-storage
+              ContainerPath: /data
+              ReadOnly: false
+          Environment:
+            - Name: DIA_ENV
+              Value: production
+            - Name: DIA_STORAGE_DIR
+              Value: /data
+            - Name: DIA_SHARED_PASSWORD
+              Value: !Ref DiaSharedPassword
+            - Name: DIA_DATABASE_URL
+              Value: !Sub 'postgresql+psycopg2://dia:${DatabasePassword}@${DBInstance.Endpoint.Address}:${DBInstance.Endpoint.Port}/dia'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: worker
+
+  # ========================================================
+  # Application Load Balancer
+  # ========================================================
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${EnvironmentName}-alb'
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-alb'
+
+  AlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${EnvironmentName}-tg'
+      Port: 8000
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '15'
+
+  AlbHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTargetGroup
+
+  AlbHttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasAcmCertificate
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref AcmCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTargetGroup
+
+  # ========================================================
+  # ECS Services
+  # ========================================================
+  ApiService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - AlbHttpListener
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-api'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref ApiTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+          SecurityGroups:
+            - !Ref EcsSecurityGroup
+      LoadBalancers:
+        - ContainerName: dia-api
+          ContainerPort: 8000
+          TargetGroupArn: !Ref AlbTargetGroup
+
+  WorkerService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-worker'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref WorkerTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+          SecurityGroups:
+            - !Ref EcsSecurityGroup
+
+# ========================================================
+# Outputs
+# ========================================================
+Outputs:
+  WebStudioURL:
+    Description: URL to open the Dataset Integrity Analyzer Web Studio
+    Value: !Sub 'http://${Alb.DNSName}'
+
+  HealthCheckURL:
+    Description: Live Health Check endpoint for monitoring
+    Value: !Sub 'http://${Alb.DNSName}/health'
+
+  RDSAddress:
+    Description: Hostname of PostgreSQL RDS instance
+    Value: !GetAtt DBInstance.Endpoint.Address
+
+  EFSId:
+    Description: File system ID for Amazon EFS
+    Value: !Ref FileSystem

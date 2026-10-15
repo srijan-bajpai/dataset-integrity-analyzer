@@ -1,0 +1,19 @@
+version: 1.0
+runtime: custom
+build:
+  commands:
+    build:
+      - echo "DIA 2.0 image configured for App Runner."
+run:
+  command: /app/entrypoint.sh all-in-one
+  network:
+    port: 8000
+    env: PORT
+  configuration:
+    env:
+      - name: DIA_ENV
+        value: "production"
+      - name: DIA_STORAGE_DIR
+        value: "/data"
+      - name: DIA_CORS_ORIGINS
+        value: "*"

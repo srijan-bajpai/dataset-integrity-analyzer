@@ -29,7 +29,7 @@ export const ExportsTab: React.FC = () => {
     ext: string;
     icon: React.ReactNode;
     description: string;
-    formatKey: 'manifest_csv' | 'html' | 'datasheet_md' | 'manifest_json';
+    formatKey: 'manifest_csv' | 'html' | 'datasheet_md' | 'manifest_json' | 'report_json';
     badge: string;
     badgeColor: string;
   }> = [
@@ -73,7 +73,7 @@ export const ExportsTab: React.FC = () => {
       description: isSimple
         ? 'All numbers and raw test findings for researchers and machine learning engineers.'
         : 'Complete lossless telemetry dump with p-values, 5-fold cross-validation logits, and pHash Hamming clusters.',
-      formatKey: 'manifest_json',
+      formatKey: 'report_json',
       badge: 'Lossless Raw Data',
       badgeColor: 'bg-purple-50 text-purple-800 border-purple-200',
     },

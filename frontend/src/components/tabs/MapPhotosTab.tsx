@@ -183,11 +183,10 @@ export const MapPhotosTab: React.FC = () => {
                   {/* Image Thumbnail Placeholder / Mock Viewer */}
                   <div className="relative aspect-square bg-[#FAF8F5] dark:bg-[#1A1816] flex items-center justify-center p-3 overflow-hidden">
                     <img
-                      src={`/api/v1/runs/${selectedRun.id}/samples/${encodeURIComponent(sample.sample_ref)}/thumbnail`}
+                      src={api.getSampleImageUrl(selectedDataset.id, sample.sample_ref, password)}
                       alt={sample.sample_ref}
                       className="w-full h-full object-cover rounded-xl"
                       onError={(e) => {
-                        // Fallback gracefully to clean SVG placeholder
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
@@ -290,7 +289,7 @@ export const MapPhotosTab: React.FC = () => {
                 </div>
                 <div className="aspect-video rounded-xl bg-stone-200 dark:bg-stone-800 flex items-center justify-center text-xs font-mono text-stone-500 overflow-hidden">
                   <img
-                    src={`/api/v1/runs/${selectedRun.id}/samples/${encodeURIComponent(diffPair.original)}/thumbnail`}
+                    src={api.getSampleImageUrl(selectedDataset.id, diffPair.original, password)}
                     alt="Photo A"
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -316,7 +315,7 @@ export const MapPhotosTab: React.FC = () => {
                 </div>
                 <div className="aspect-video rounded-xl bg-stone-200 dark:bg-stone-800 flex items-center justify-center text-xs font-mono text-stone-500 overflow-hidden">
                   <img
-                    src={`/api/v1/runs/${selectedRun.id}/samples/${encodeURIComponent(diffPair.duplicate)}/thumbnail`}
+                    src={api.getSampleImageUrl(selectedDataset.id, diffPair.duplicate, password)}
                     alt="Photo B"
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -364,6 +363,16 @@ export const MapPhotosTab: React.FC = () => {
               <button onClick={() => setSelectedSample(null)} className="p-1 text-stone-400 hover:text-stone-600">
                 <X className="w-5 h-5" />
               </button>
+            </div>
+            <div className="aspect-video rounded-2xl bg-stone-100 dark:bg-stone-900 overflow-hidden flex items-center justify-center border border-stone-200 dark:border-stone-800">
+              <img
+                src={api.getSampleImageUrl(selectedDataset.id, selectedSample.sample_ref, password)}
+                alt={selectedSample.sample_ref}
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
             </div>
             <div className="space-y-2 text-xs">
               <div className="flex justify-between py-1 border-b border-stone-100 dark:border-stone-800">

@@ -28,6 +28,7 @@ class Settings:
     shared_password: Optional[str] = os.getenv("DIA_SHARED_PASSWORD")
     environment: str = os.getenv("DIA_ENV", "development").lower()
     worker_poll_seconds: int = _env_int("DIA_WORKER_POLL_SECONDS", 2)
+    cors_origins: str = os.getenv("DIA_CORS_ORIGINS", "*")
     supported_image_extensions: frozenset[str] = frozenset(
         {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
     )

@@ -32,13 +32,25 @@ app = FastAPI(
     description="Audit image classification datasets for quality, representation, duplication, diversity, and label concerns.",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+cors_origins_raw = settings.cors_origins.strip()
+if cors_origins_raw == "*" or not cors_origins_raw:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    origins = [orig.strip() for orig in cors_origins_raw.split(",") if orig.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 
 
 class RunRequest(BaseModel):
@@ -275,6 +287,27 @@ def get_sample_image(
         ".tiff": "image/tiff",
     }
     return FileResponse(file_path, media_type=media_types.get(ext, "application/octet-stream"))
+
+
+@app.get("/v1/datasets/{dataset_id}/samples/{sample_ref:path}/thumbnail", dependencies=[Depends(require_password)])
+def get_sample_thumbnail(
+    dataset_id: str,
+    sample_ref: str,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    return get_sample_image(dataset_id=dataset_id, sample_ref=sample_ref, db=db)
+
+
+@app.get("/v1/runs/{run_id}/samples/{sample_ref:path}/image", dependencies=[Depends(require_password)])
+@app.get("/v1/runs/{run_id}/samples/{sample_ref:path}/thumbnail", dependencies=[Depends(require_password)])
+def get_run_sample_image(
+    run_id: str,
+    sample_ref: str,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    run = _run_or_404(db, run_id)
+    return get_sample_image(dataset_id=run.dataset_id, sample_ref=sample_ref, db=db)
+
 
 
 @app.post("/v1/datasets/{dataset_id}/runs", status_code=202, dependencies=[Depends(require_password)])
@@ -638,6 +671,21 @@ def delete_dataset(dataset_id: str, db: Session = Depends(get_db)) -> None:
 frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if frontend_dist.is_dir():
     from fastapi.staticfiles import StaticFiles
-    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+    assets_dir = frontend_dist / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="frontend_assets")
+
+    index_html = frontend_dist / "index.html"
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa_or_file(full_path: str):
+        if full_path.startswith("v1/") or full_path == "v1" or full_path.startswith("docs") or full_path == "openapi.json":
+            raise HTTPException(status_code=404, detail="Not found.")
+        file_candidate = frontend_dist / full_path
+        if file_candidate.is_file() and not full_path.endswith("/"):
+            return FileResponse(file_candidate)
+        if index_html.is_file():
+            return FileResponse(index_html)
+        raise HTTPException(status_code=404, detail="Frontend index.html not found.")
 
 

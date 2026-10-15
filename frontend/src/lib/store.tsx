@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Dataset, AnalysisRun, ReportData } from './types';
-import { api } from './api';
+import { api, ApiError } from './api';
 
 export type AudienceMode = 'simple' | 'engineer';
 export type TabKey = 'overview' | 'map' | 'whatif' | 'exports';
@@ -125,6 +125,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch datasets';
       setDatasetsError(msg);
+      if (err instanceof ApiError && err.status === 401) {
+        setIsUnlockModalOpen(true);
+      }
     }
   }, [password]);
 

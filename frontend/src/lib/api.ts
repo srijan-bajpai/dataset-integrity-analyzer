@@ -27,6 +27,8 @@ export class ApiError extends Error {
   }
 }
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') || '';
+
 class ApiClient {
   private getHeaders(password?: string | null): HeadersInit {
     const headers: HeadersInit = {
@@ -57,7 +59,7 @@ class ApiClient {
 
   // --- Datasets ---
   async getDatasets(password?: string | null): Promise<Dataset[]> {
-    const res = await fetch('/v1/datasets', {
+    const res = await fetch(`${API_BASE}/v1/datasets`, {
       headers: this.getHeaders(password),
     });
     const data = await this.handleResponse<unknown>(res);
@@ -66,7 +68,7 @@ class ApiClient {
 
   async verifyPassword(password: string): Promise<boolean> {
     try {
-      const res = await fetch('/v1/datasets', {
+      const res = await fetch(`${API_BASE}/v1/datasets`, {
         headers: this.getHeaders(password),
       });
       return res.ok;
@@ -76,7 +78,7 @@ class ApiClient {
   }
 
   async getDataset(id: string, password?: string | null): Promise<DatasetDetail> {
-    const res = await fetch(`/v1/datasets/${encodeURIComponent(id)}`, {
+    const res = await fetch(`${API_BASE}/v1/datasets/${encodeURIComponent(id)}`, {
       headers: this.getHeaders(password),
     });
     const data = await this.handleResponse<unknown>(res);
@@ -86,7 +88,7 @@ class ApiClient {
   async uploadDataset(file: File, name?: string, password?: string | null): Promise<Dataset> {
     const formData = new FormData();
     formData.append('file', file);
-    let url = '/v1/datasets';
+    let url = `${API_BASE}/v1/datasets`;
     if (name) {
       url += `?name=${encodeURIComponent(name)}`;
     }
@@ -104,7 +106,7 @@ class ApiClient {
   }
 
   async deleteDataset(id: string, password?: string | null): Promise<void> {
-    const res = await fetch(`/v1/datasets/${encodeURIComponent(id)}`, {
+    const res = await fetch(`${API_BASE}/v1/datasets/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: this.getHeaders(password),
     });
@@ -129,7 +131,7 @@ class ApiClient {
       ...this.getHeaders(password),
       'Content-Type': 'application/json',
     };
-    const res = await fetch(`/v1/datasets/${encodeURIComponent(datasetId)}/runs`, {
+    const res = await fetch(`${API_BASE}/v1/datasets/${encodeURIComponent(datasetId)}/runs`, {
       method: 'POST',
       headers,
       body: JSON.stringify(config),
@@ -138,7 +140,7 @@ class ApiClient {
   }
 
   async getRun(runId: string, password?: string | null): Promise<AnalysisRun> {
-    const res = await fetch(`/v1/runs/${encodeURIComponent(runId)}`, {
+    const res = await fetch(`${API_BASE}/v1/runs/${encodeURIComponent(runId)}`, {
       headers: this.getHeaders(password),
     });
     const data = await this.handleResponse<unknown>(res);
@@ -146,7 +148,7 @@ class ApiClient {
   }
 
   async cancelRun(runId: string, password?: string | null): Promise<{ run_id: string; status: string }> {
-    const res = await fetch(`/v1/runs/${encodeURIComponent(runId)}/cancel`, {
+    const res = await fetch(`${API_BASE}/v1/runs/${encodeURIComponent(runId)}/cancel`, {
       method: 'POST',
       headers: this.getHeaders(password),
     });
@@ -155,7 +157,7 @@ class ApiClient {
 
   // --- Reports & Visualizations ---
   async getReport(runId: string, password?: string | null): Promise<ReportData> {
-    const res = await fetch(`/v1/runs/${encodeURIComponent(runId)}/report`, {
+    const res = await fetch(`${API_BASE}/v1/runs/${encodeURIComponent(runId)}/report`, {
       headers: this.getHeaders(password),
     });
     const data = await this.handleResponse<unknown>(res);
@@ -171,7 +173,7 @@ class ApiClient {
       ...this.getHeaders(password),
       'Content-Type': 'application/json',
     };
-    const res = await fetch(`/v1/runs/${encodeURIComponent(runId)}/what-if`, {
+    const res = await fetch(`${API_BASE}/v1/runs/${encodeURIComponent(runId)}/what-if`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ changes }),
@@ -187,7 +189,7 @@ class ApiClient {
     flaggedOnly = true,
     password?: string | null
   ): Promise<{ total: number; items: FlaggedSampleItem[] }> {
-    const url = `/v1/runs/${encodeURIComponent(runId)}/samples?limit=${limit}&offset=${offset}&flagged_only=${flaggedOnly}`;
+    const url = `${API_BASE}/v1/runs/${encodeURIComponent(runId)}/samples?limit=${limit}&offset=${offset}&flagged_only=${flaggedOnly}`;
     const res = await fetch(url, {
       headers: this.getHeaders(password),
     });
@@ -196,7 +198,7 @@ class ApiClient {
   }
 
   async getEmbeddings3D(runId: string, password?: string | null): Promise<Embeddings3DResponse> {
-    const res = await fetch(`/v1/runs/${encodeURIComponent(runId)}/embeddings-3d`, {
+    const res = await fetch(`${API_BASE}/v1/runs/${encodeURIComponent(runId)}/embeddings-3d`, {
       headers: this.getHeaders(password),
     });
     const data = await this.handleResponse<unknown>(res);
@@ -204,7 +206,7 @@ class ApiClient {
   }
 
   async compareRuns(runA: string, runB: string, password?: string | null): Promise<RunComparison> {
-    const res = await fetch(`/v1/runs/${encodeURIComponent(runA)}/compare/${encodeURIComponent(runB)}`, {
+    const res = await fetch(`${API_BASE}/v1/runs/${encodeURIComponent(runA)}/compare/${encodeURIComponent(runB)}`, {
       headers: this.getHeaders(password),
     });
     const data = await this.handleResponse<unknown>(res);
@@ -213,20 +215,26 @@ class ApiClient {
 
   // --- Sample Image URL ---
   getSampleImageUrl(datasetId: string, sampleRef: string, password?: string | null): string {
-    const base = `/v1/datasets/${encodeURIComponent(datasetId)}/samples/${encodeURIComponent(sampleRef)}/image`;
+    const base = `${API_BASE}/v1/datasets/${encodeURIComponent(datasetId)}/samples/${encodeURIComponent(sampleRef)}/image`;
+    return password ? `${base}?token=${encodeURIComponent(password)}` : base;
+  }
+
+  getRunSampleImageUrl(runId: string, sampleRef: string, password?: string | null): string {
+    const base = `${API_BASE}/v1/runs/${encodeURIComponent(runId)}/samples/${encodeURIComponent(sampleRef)}/image`;
     return password ? `${base}?token=${encodeURIComponent(password)}` : base;
   }
 
   // --- Direct Download Links ---
-  getExportUrl(runId: string, type: 'html' | 'datasheet_md' | 'datasheet_json' | 'manifest_csv' | 'manifest_json' | 'samples_csv', password?: string | null): string {
+  getExportUrl(runId: string, type: 'html' | 'datasheet_md' | 'datasheet_json' | 'manifest_csv' | 'manifest_json' | 'samples_csv' | 'report_json', password?: string | null): string {
     let path = '';
     switch (type) {
-      case 'html': path = `/v1/runs/${runId}/report.html`; break;
-      case 'datasheet_md': path = `/v1/runs/${runId}/model-card.md`; break;
-      case 'datasheet_json': path = `/v1/runs/${runId}/model-card.json`; break;
-      case 'manifest_csv': path = `/v1/runs/${runId}/remediation-manifest.csv`; break;
-      case 'manifest_json': path = `/v1/runs/${runId}/remediation-manifest.json`; break;
-      case 'samples_csv': path = `/v1/runs/${runId}/samples.csv`; break;
+      case 'html': path = `${API_BASE}/v1/runs/${runId}/report.html`; break;
+      case 'datasheet_md': path = `${API_BASE}/v1/runs/${runId}/model-card.md`; break;
+      case 'datasheet_json': path = `${API_BASE}/v1/runs/${runId}/model-card.json`; break;
+      case 'manifest_csv': path = `${API_BASE}/v1/runs/${runId}/remediation-manifest.csv`; break;
+      case 'manifest_json': path = `${API_BASE}/v1/runs/${runId}/remediation-manifest.json`; break;
+      case 'samples_csv': path = `${API_BASE}/v1/runs/${runId}/samples.csv`; break;
+      case 'report_json': path = `${API_BASE}/v1/runs/${runId}/report`; break;
     }
     return password ? `${path}?token=${encodeURIComponent(password)}` : path;
   }

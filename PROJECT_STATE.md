@@ -50,3 +50,16 @@ Develop a unified AI dataset health assessment framework that evaluates datasets
   - Direct 1-click downloads for standalone HTML report, Model Card Datasheet (MD/JSON), and Remediation Manifest CSV.
   - Automated integration test suite: 39 pytest tests passing (including 3D embeddings endpoint and static SPA mount).
 
+## DIA 2.0 Full-Stack Integration & AWS Readiness Milestone (COMPLETED)
+- **Seamless Full-Stack Integration**: Integrated Vite frontend bundle into FastAPI backend with SPA fallback routing, CORS compliance, and unified static serving on port 8000.
+- **Image & Telemetry API Bridging**: Added run-based and thumbnail sample image routes, wired up live image rendering across 3D Map and photo triage views, and enabled 1-click lossless diagnostic metric downloads.
+- **Multi-Stage Docker Architecture**: Built multi-stage `Dockerfile` (Node 20 builder + Python 3.12 runtime) with container healthchecks, and created `entrypoint.sh` supporting `api`, `worker`, and `all-in-one` execution modes.
+- **AWS Deployment Assets**:
+  - `aws/cloudformation.yaml`: Complete production infrastructure stack (ALB + ECS Fargate + RDS PostgreSQL 16 + Amazon EFS encrypted shared storage).
+  - `aws/deploy-ec2.sh`: 1-command automated deployment script for Amazon Linux 2023 / Ubuntu with systemd auto-restart service and health check verification.
+  - `aws/apprunner.yaml`: Configuration for serverless container execution on AWS App Runner.
+  - `aws/s3-sync.sh`: S3 backup and restore utility for `/data` storage.
+  - `docs/AWS_DEPLOYMENT_GUIDE.md`: Comprehensive end-to-end cloud deployment manual.
+- **Quality Assurance**: Frontend builds with 0 TypeScript errors (`npm run build`), all 39 pytest tests pass with 100% success rate, and live endpoint verification confirms seamless HTML and API serving.
+
+

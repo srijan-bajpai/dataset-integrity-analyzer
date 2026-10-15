@@ -1,61 +1,93 @@
-# Dataset Integrity Analyzer (DIA)
+# Dataset Integrity Analyzer (DIA) 2.0
 
-DIA is a database-backed service for auditing image-classification datasets before model training. It accepts ZIP uploads containing class folders or a CSV/JSONL manifest, stores reproducible analysis runs, and returns machine-readable findings with sample-level evidence. Fairness results are review signals, not proof that a dataset or model is fair.
+DIA 2.0 is an enterprise-grade full-stack platform for auditing image-classification datasets before model training. It seamlessly integrates a modern React Web Studio frontend with a high-performance Python FastAPI backend, PostgreSQL database, and asynchronous audit worker pipeline.
 
-The v2 backend is the active version. The Streamlit app remains a legacy local demo surface; frontend work will follow after the API contract stabilizes.
+Accepting ZIP uploads containing class folders or CSV/JSONL manifests, DIA performs deep audits across 6 core integrity dimensions, stores reproducible analysis runs, and presents machine-readable evidence alongside interactive 3D visualizations and layperson-friendly ELI5 explanations.
 
-## What it measures
+---
 
-- Class balance and supplied metadata completeness/schema issues.
-- Group representation, optional operator-provided targets, confidence intervals, class associations, intersectional support, and split skew.
-- Image blur, Lab brightness and contrast, noise estimate, resolution, aspect ratio, file size, and basic image anomalies.
-- Exact and perceptual duplicates, with embedding confirmation when pretrained features are available; reports cross-split leakage and conflicting labels.
-- ResNet-based visual diversity and cross-validated label-disagreement review signals when the model weights are available.
-- Versioned readiness scoring with dimension coverage, recommendations, provenance, run comparison, CSV export, and cancellation.
+## What It Audits & Delivers
 
-The API deliberately reports dedicated face-demographic inference, BRISQUE, and accuracy-impact prediction as unavailable until those models pass documented validation. Opt-in attribute suggestions learn only from metadata already supplied in the dataset, remain separate from user values, and require review. See [SRS traceability and remaining work](docs/SRS_TRACEABILITY.md).
+- **6 Core Integrity Dimensions**:
+  1. **Balance & Representation**: Class skew, group representation, operator-provided targets, confidence intervals, and split skew.
+  2. **Image Quality & Defect Scan**: Blur, brightness, contrast, noise, resolution, aspect ratio, and corrupt files.
+  3. **Near-Duplicates & Train/Test Leakage**: Perceptual hashing (pHash) and exact duplicate detection, highlighting cross-split contamination.
+  4. **Visual Diversity & 3D Clusters**: High-dimensional embedding projections (PCA/Three.js) revealing visual clusters and isolated visual outliers.
+  5. **Label Integrity & Suspected Mislabels**: Cross-validated label-disagreement signals identifying noisy annotations.
+  6. **Unified Health Scoring & What-If Simulator**: Holistic 0–100 readiness scoring with live scenario simulation to test the score impact of proposed data cleanups.
+- **Dual Audience Telemetry**: Instant toggle between **Layman / Simple Mode** (ELI5 plain-English summaries, intuitive health gauges, and non-tech translations) and **Engineering Mode** (lossless metrics, p-values, logits, and Hamming distances).
+- **1-Click Compliance Exports**: Standalone executive HTML reports, Gebru et al. Datasheets for Datasets (Markdown/JSON), and CSV remediation manifests.
 
-## Run locally
+---
 
-Use Python 3.12. In PowerShell:
+## Live Web Studio & Local Development
 
-```powershell
+### 1. Run Everything Locally (Unified Mode)
+
+#### Backend Setup
+```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements-v2.txt
-python -m alembic upgrade head
+# Windows: .\.venv\Scripts\Activate.ps1 | Linux/macOS: source .venv/bin/activate
+pip install -r requirements-v2.txt
+alembic upgrade head
 ```
 
-Start the API and worker in separate terminals:
+#### Frontend Setup & Build
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
 
-```powershell
-python -m uvicorn dia.api.main:app --reload
+#### Launch DIA
+```bash
+python -m uvicorn dia.api.main:app --port 8000
+# In a second terminal (for async audit jobs):
 python -m dia.worker
 ```
 
-The API is available at `http://127.0.0.1:8000`; interactive endpoint docs are at `/docs`. See the [API guide](docs/API_GUIDE.md) for upload formats, options, authentication, report fields, deletion, and deployment.
+Open `http://localhost:8000` in your browser. The FastAPI backend automatically serves the integrated React Web Studio!
 
-## Deploy with Docker Compose
+---
 
-Copy `.env.example` to `.env`, set `POSTGRES_PASSWORD` and `DIA_SHARED_PASSWORD`, then run:
+## Docker Compose Quickstart
 
-```powershell
+For local container testing or single-server deployment:
+
+```bash
+# 1. Copy environment template
+cp .env.example .env
+
+# 2. Launch PostgreSQL, API, and Worker containers
 docker compose up --build
 ```
 
-Compose uses PostgreSQL and persistent named volumes for the database and uploaded data. The published API port binds to localhost by default. Place an HTTPS reverse proxy in front of any externally reachable deployment.
+- **Web Studio**: `http://localhost:8000`
+- **Interactive OpenAPI Docs**: `http://localhost:8000/docs`
+- **Health Check**: `http://localhost:8000/health`
 
-## Verify
+---
 
-For a copy-and-paste walkthrough using the included sample images, follow the [Easy Test Guide](docs/TESTING_GUIDE.md).
+## AWS Cloud Deployment
 
-```powershell
-python -m pytest -q
-python -m alembic upgrade head
+DIA 2.0 is fully **AWS Ready** with multiple zero-friction deployment pathways:
+
+| Deployment Path | Description | Documentation |
+| :--- | :--- | :--- |
+| **AWS EC2 (1-Command Script)** | Production setup on Amazon Linux 2023 or Ubuntu with Docker, automated SSL, and systemd auto-restart. | [AWS Deployment Guide](docs/AWS_DEPLOYMENT_GUIDE.md#3-option-a-automated-amazon-ec2-deployment-recommended) |
+| **AWS ECS Fargate + RDS + EFS** | Enterprise serverless architecture with CloudFormation (`aws/cloudformation.yaml`), Application Load Balancer, and encrypted shared storage. | [AWS Deployment Guide](docs/AWS_DEPLOYMENT_GUIDE.md#4-option-b-enterprise-serverless-aws-ecs-fargate--rds--efs) |
+| **AWS App Runner** | Managed single-container serverless deployment. | [AWS Deployment Guide](docs/AWS_DEPLOYMENT_GUIDE.md) |
+| **Amazon S3 Storage Sync** | Automated dataset backup and disaster recovery utility (`aws/s3-sync.sh`). | [AWS Deployment Guide](docs/AWS_DEPLOYMENT_GUIDE.md#6-s3-dataset-sync--disaster-recovery) |
+
+---
+
+## Testing & Quality Assurance
+
+Run the comprehensive test suite (39 backend integrity tests):
+
+```bash
+pytest -q
 ```
 
-The current acceptance tests exercise ingestion safety, metadata and fairness summaries, image metrics, duplicate grouping, readiness gates, API authentication, run persistence, cancellation, report export, and dataset deletion. Docker smoke tests require a Docker-capable host.
-
-## Dataset handling
-
-ZIP uploads and extracted images stay in the configured `DIA_STORAGE_DIR` until the dataset is explicitly deleted. The service does not modify the user's source files. Production mode requires `DIA_SHARED_PASSWORD`; set `DIA_DATABASE_URL` and `DIA_STORAGE_DIR` for deployment storage. Upload and extraction size limits, per-image limits, and the sample cap are configurable with environment variables documented in `.env.example`.
+To run end-to-end smoke tests using included sample datasets, follow the [Testing Guide](docs/TESTING_GUIDE.md).
