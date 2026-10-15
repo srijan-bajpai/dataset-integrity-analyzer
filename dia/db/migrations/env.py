@@ -32,12 +32,14 @@ def run_migrations_online():
         prefix="sqlalchemy.", poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        try:
-            if connection.dialect.name == "postgresql":
-                connection.execute(sa.text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128);"))
-                connection.commit()
-        except Exception:
-            pass
+        inspector = sa.inspect(connection)
+        if "alembic_version" in inspector.get_table_names() and connection.dialect.name == "postgresql":
+            try:
+                with connection.begin():
+                    connection.execute(sa.text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128);"))
+            except Exception:
+                pass
+
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
