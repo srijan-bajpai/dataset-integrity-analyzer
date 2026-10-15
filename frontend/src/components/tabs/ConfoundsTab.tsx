@@ -350,7 +350,7 @@ export const ConfoundsTab: React.FC = () => {
                   <button
                     onClick={() => {
                       setSelectedConfound(null);
-                      setActiveTab('triage');
+                      setActiveTab('map');
                     }}
                     className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-md transition-colors flex items-center justify-center gap-1.5"
                   >

@@ -65,7 +65,7 @@ export const ReadinessGauge3D: React.FC<ReadinessGauge3DProps> = ({
             strokeWidth={strokeWidth}
             strokeDasharray={`${arcLength} ${circumference}`}
             strokeLinecap="round"
-            className="text-zinc-200 dark:text-zinc-800/60"
+            className="text-stone-200 dark:text-stone-800/80"
           />
 
           {/* Value Progress Stroke */}

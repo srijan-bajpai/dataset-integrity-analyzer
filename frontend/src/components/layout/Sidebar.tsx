@@ -96,10 +96,10 @@ export const Sidebar: React.FC = () => {
 
   if (isCollapsed) {
     return (
-      <aside className="w-14 border-r border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/70 p-2 flex flex-col items-center gap-3 shrink-0">
+      <aside className="w-14 border-r border-stone-200/80 dark:border-stone-800 bg-[#FAF8F5]/80 dark:bg-[#181614]/80 p-2 flex flex-col items-center gap-3 shrink-0">
         <button
           onClick={() => setIsCollapsed(false)}
-          className="p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          className="p-2 rounded-2xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
           title="Expand workspace sidebar"
         >
           <PanelLeftOpen className="w-5 h-5" />
@@ -109,15 +109,15 @@ export const Sidebar: React.FC = () => {
             if (!isUnlocked) setIsUnlockModalOpen(true);
             else setIsUploadOpen(true);
           }}
-          className="p-2 rounded-xl bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white transition-colors"
+          className="p-2.5 rounded-2xl bg-amber-600 text-white hover:bg-amber-700 shadow-warm-sm transition-colors"
           title="Upload dataset ZIP"
         >
           <Plus className="w-5 h-5" />
         </button>
         <button
           onClick={() => setIsCompareOpen(true)}
-          className="p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-          title="Diff two audits"
+          className="p-2 rounded-2xl text-stone-500 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+          title="Compare two audits"
         >
           <GitCompare className="w-5 h-5" />
         </button>
@@ -126,22 +126,22 @@ export const Sidebar: React.FC = () => {
   }
 
   return (
-    <aside className="w-64 md:w-72 border-r border-zinc-200 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md flex flex-col shrink-0 h-[calc(100vh-4rem)]">
+    <aside className="w-60 md:w-64 border-r border-stone-200/80 dark:border-stone-800 bg-[#FAF8F5]/80 dark:bg-[#181614]/80 backdrop-blur-md flex flex-col shrink-0 h-[calc(100vh-4rem)]">
       {/* Top Sidebar Action */}
-      <div className="p-3.5 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+      <div className="p-4 border-b border-stone-200/80 dark:border-stone-800 flex items-center justify-between gap-2">
         <button
           onClick={() => {
             if (!isUnlocked) setIsUnlockModalOpen(true);
             else setIsUploadOpen(true);
           }}
-          className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-lg shadow-indigo-950/60 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white font-medium text-xs shadow-warm-sm transition-all"
         >
-          <FolderPlus className="w-4 h-4" />
+          <FolderPlus className="w-4 h-4 text-amber-500" />
           <span>Upload Dataset ZIP</span>
         </button>
         <button
           onClick={() => setIsCollapsed(true)}
-          className="p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
+          className="p-2 rounded-2xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
           title="Collapse sidebar"
         >
           <PanelLeftClose className="w-4 h-4" />

@@ -3,7 +3,7 @@ import type { Dataset, AnalysisRun, ReportData } from './types';
 import { api } from './api';
 
 export type AudienceMode = 'simple' | 'engineer';
-export type TabKey = 'overview' | 'dimensions' | 'confounds' | 'whatif' | 'triage';
+export type TabKey = 'overview' | 'map' | 'whatif' | 'exports';
 
 interface AppContextValue {
   theme: 'dark' | 'light';
@@ -50,7 +50,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('dia_theme') as 'dark' | 'light') || 'dark';
+    return (localStorage.getItem('dia_theme') as 'dark' | 'light') || 'light';
   });
   
   const [audienceMode, setAudienceModeState] = useState<AudienceMode>(() => {

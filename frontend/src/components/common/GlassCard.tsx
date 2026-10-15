@@ -31,8 +31,8 @@ export const GlassCard: React.FC<GlassCardProps> = ({
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
 
-    const rotX = ((y - centerY) / centerY) * -6; // max 6 deg tilt
-    const rotY = ((x - centerX) / centerX) * 6;
+    const rotX = ((y - centerY) / centerY) * -4; // max 4 deg gentle tilt
+    const rotY = ((x - centerX) / centerX) * 4;
 
     setRotateX(rotX);
     setRotateY(rotY);
@@ -40,7 +40,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
     setGlarePosition({
       x: (x / rect.width) * 100,
       y: (y / rect.height) * 100,
-      opacity: 0.15,
+      opacity: 0.12,
     });
   };
 
@@ -52,18 +52,18 @@ export const GlassCard: React.FC<GlassCardProps> = ({
   };
 
   const glowClass = {
-    emerald: 'hover:shadow-glow-emerald hover:border-emerald-500/40',
-    sky: 'hover:shadow-glow-sky hover:border-sky-500/40',
-    amber: 'hover:shadow-glow-amber hover:border-amber-500/40',
-    rose: 'hover:shadow-glow-rose hover:border-rose-500/40',
-    indigo: 'hover:shadow-glow-indigo hover:border-indigo-500/40',
-    none: 'hover:border-zinc-700/80 dark:hover:border-zinc-700/80',
+    emerald: 'hover:border-emerald-500/50 hover:shadow-[0_12px_32px_-4px_rgba(21,128,61,0.12)]',
+    sky: 'hover:border-sky-500/50 hover:shadow-[0_12px_32px_-4px_rgba(3,105,161,0.12)]',
+    amber: 'hover:border-amber-500/50 hover:shadow-[0_12px_32px_-4px_rgba(180,83,9,0.12)]',
+    rose: 'hover:border-rose-500/50 hover:shadow-[0_12px_32px_-4px_rgba(190,18,60,0.12)]',
+    indigo: 'hover:border-indigo-500/50 hover:shadow-[0_12px_32px_-4px_rgba(99,102,241,0.12)]',
+    none: 'hover:border-stone-300 dark:hover:border-stone-700',
   }[glow];
 
   const elevationClass = {
-    sm: 'shadow-glass-sm',
-    md: 'shadow-glass',
-    lg: 'shadow-2xl',
+    sm: 'shadow-warm-sm',
+    md: 'shadow-warm-md',
+    lg: 'shadow-warm-lg',
   }[elevation];
 
   return (
@@ -73,23 +73,23 @@ export const GlassCard: React.FC<GlassCardProps> = ({
       onMouseLeave={handleMouseLeave}
       style={{
         transform: tilt ? `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)` : undefined,
-        transition: 'transform 0.15s ease-out, box-shadow 0.25s ease, border-color 0.2s ease',
+        transition: 'transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease',
       }}
       className={cn(
-        'relative rounded-2xl glass-card specular-border overflow-hidden p-5',
+        'relative rounded-3xl bg-white dark:bg-[#221F1D] border border-stone-200/80 dark:border-stone-800/80 overflow-hidden p-6 tactile-card',
         elevationClass,
         glowClass,
         className
       )}
       {...props}
     >
-      {/* Dynamic Specular Glare */}
+      {/* Dynamic Specular Daylight Glare */}
       {tilt && (
         <div
           className="pointer-events-none absolute inset-0 transition-opacity duration-300 z-10"
           style={{
             opacity: glarePosition.opacity,
-            background: `radial-gradient(circle 280px at ${glarePosition.x}% ${glarePosition.y}%, rgba(255, 255, 255, 0.4), transparent 70%)`,
+            background: `radial-gradient(circle 320px at ${glarePosition.x}% ${glarePosition.y}%, rgba(255, 255, 255, 0.6), transparent 70%)`,
           }}
         />
       )}

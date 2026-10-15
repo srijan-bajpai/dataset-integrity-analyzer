@@ -8,6 +8,7 @@ import { RotateCw, Sparkles } from 'lucide-react';
 interface ClusterExplorer3DProps {
   runId: string;
   datasetId: string;
+  onSelectPoint?: (point: Point3D) => void;
 }
 
 const CLASS_PALETTE = [
@@ -24,6 +25,7 @@ const CLASS_PALETTE = [
 export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
   runId,
   datasetId,
+  onSelectPoint,
 }) => {
   const { password, theme } = useApp();
   const mountRef = useRef<HTMLDivElement>(null);
@@ -71,7 +73,7 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
     // Scene & Camera
     const isDark = theme !== 'light';
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(isDark ? 0x09090b : 0xf4f4f5); // zinc-950 or zinc-100
+    scene.background = new THREE.Color(isDark ? 0x181614 : 0xfaf8f5); // Warm obsidian or warm paper alabaster
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
     camera.position.set(0, 5, 18);
@@ -218,8 +220,24 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
       camera.position.z = Math.min(Math.max(camera.position.z + e.deltaY * 0.02, 6), 35);
     };
 
+    const onClick = (e: MouseEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mouseX = ((e.clientX - rect.left) / width) * 2 - 1;
+      const mouseY = -((e.clientY - rect.top) / height) * 2 + 1;
+      mouseVec.set(mouseX, mouseY);
+      raycaster.setFromCamera(mouseVec, camera);
+      const intersects = raycaster.intersectObjects(interactiveMeshes);
+      if (intersects.length > 0) {
+        const hit = meshes.find(m => m.mesh === intersects[0].object);
+        if (hit && onSelectPoint) {
+          onSelectPoint(hit.point);
+        }
+      }
+    };
+
     const domElement = renderer.domElement;
     domElement.addEventListener('mousedown', onMouseDown);
+    domElement.addEventListener('click', onClick);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     domElement.addEventListener('wheel', onWheel, { passive: false });

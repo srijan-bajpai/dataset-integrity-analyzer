@@ -3,16 +3,14 @@ import { AppProvider, useApp, type TabKey } from './lib/store';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { OverviewTab } from './components/tabs/OverviewTab';
-import { DimensionsTab } from './components/tabs/DimensionsTab';
-import { ConfoundsTab } from './components/tabs/ConfoundsTab';
+import { MapPhotosTab } from './components/tabs/MapPhotosTab';
 import { WhatIfTab } from './components/tabs/WhatIfTab';
-import { TriageTab } from './components/tabs/TriageTab';
+import { ExportsTab } from './components/tabs/ExportsTab';
 import { UploadZipModal } from './components/upload/UploadZipModal';
 import { RunCompareModal } from './components/compare/RunCompareModal';
 import { UnlockModal } from './components/common/UnlockModal';
 import {
   LayoutDashboard,
-  Activity,
   Layers,
   Sliders,
   FileSearch,
@@ -30,11 +28,10 @@ const MainLayout: React.FC = () => {
   } = useApp();
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: string }[] = [
-    { key: 'overview', label: '1. Overview & Readiness', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { key: 'dimensions', label: '2. 6 Dimensions', icon: <Activity className="w-4 h-4" /> },
-    { key: 'confounds', label: '3. Hidden Confounds (C1)', icon: <Layers className="w-4 h-4" />, badge: 'Novel' },
-    { key: 'whatif', label: '4. What-If & Impact (C2)', icon: <Sliders className="w-4 h-4" />, badge: 'Simulator' },
-    { key: 'triage', label: '5. Sample Triage & Exports', icon: <FileSearch className="w-4 h-4" /> },
+    { key: 'overview', label: '1. Overview & Action Plan', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { key: 'map', label: '2. 3D Map & Photos', icon: <Layers className="w-4 h-4" /> },
+    { key: 'whatif', label: '3. What-If Simulator', icon: <Sliders className="w-4 h-4" />, badge: 'Simulator' },
+    { key: 'exports', label: '4. Exports & Reports', icon: <FileSearch className="w-4 h-4" /> },
   ];
 
   const handleCancelRun = async () => {
@@ -48,7 +45,7 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#181614] text-stone-900 dark:text-stone-100 flex flex-col antialiased selection:bg-amber-500/20 selection:text-amber-900 font-sans">
       {/* Top Header */}
       <Header />
 
@@ -57,46 +54,46 @@ const MainLayout: React.FC = () => {
         <Sidebar />
 
         {/* Main Content Workspace */}
-        <main className="flex-1 flex flex-col overflow-y-auto bg-telemetry-grid">
+        <main className="flex-1 flex flex-col overflow-y-auto bg-warm-grid">
           {/* Live Progress Banner for Active Audits */}
           {selectedRun && (selectedRun.status === 'running' || selectedRun.status === 'queued') && (
-            <div className="bg-indigo-500/10 dark:bg-indigo-950/80 border-b border-indigo-500/30 p-3 px-6 flex items-center justify-between text-xs text-indigo-700 dark:text-indigo-200">
+            <div className="bg-amber-500/10 border-b border-amber-500/30 p-3.5 px-6 flex items-center justify-between text-xs text-amber-900 dark:text-amber-200">
               <div className="flex items-center gap-3">
-                <RotateCw className="w-4 h-4 text-indigo-500 dark:text-indigo-400 animate-spin shrink-0" />
+                <RotateCw className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
                 <span>
                   <strong>Run #{selectedRun.id.slice(0, 8)}:</strong> {selectedRun.status_message || 'Analyzing dataset integrity...'} ({selectedRun.progress_percent}%)
                 </span>
               </div>
               <button
                 onClick={handleCancelRun}
-                className="px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-700 text-xs font-mono transition-colors"
+                className="px-3 py-1 rounded-xl bg-white dark:bg-stone-900 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-300 dark:border-stone-700 text-xs font-mono transition-colors"
               >
                 Cancel Audit
               </button>
             </div>
           )}
 
-          {/* Studio Tab Navigation Bar */}
-          <div className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md px-4 sm:px-6 pt-3">
-            <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto pb-px">
+          {/* 4 Focused Views Tab Navigation Bar */}
+          <div className="border-b border-stone-200/80 dark:border-stone-800 bg-white/70 dark:bg-[#181614]/70 backdrop-blur-md px-6 pt-3 sticky top-0 z-30">
+            <nav className="flex space-x-2 overflow-x-auto pb-px max-w-6xl mx-auto">
               {tabs.map(tab => {
                 const isActive = activeTab === tab.key;
                 return (
                   <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
-                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-t-xl text-xs font-medium whitespace-nowrap transition-all border-b-2 ${
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs font-medium whitespace-nowrap transition-all border-b-2 ${
                       isActive
-                        ? 'border-indigo-500 text-zinc-900 dark:text-white bg-white/90 dark:bg-zinc-900/90 shadow-sm'
-                        : 'border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900/40'
+                        ? 'border-amber-600 text-stone-900 dark:text-white bg-white dark:bg-[#221F1D] shadow-warm-sm'
+                        : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 hover:bg-stone-100/60 dark:hover:bg-stone-800/40'
                     }`}
                   >
-                    <span className={isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400 dark:text-zinc-500'}>
+                    <span className={isActive ? 'text-amber-600' : 'text-stone-400'}>
                       {tab.icon}
                     </span>
                     <span>{tab.label}</span>
                     {tab.badge && (
-                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      <span className="text-[9px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                         {tab.badge}
                       </span>
                     )}
@@ -107,12 +104,11 @@ const MainLayout: React.FC = () => {
           </div>
 
           {/* Active Tab Screen */}
-          <div className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
+          <div className="flex-1 p-6 md:p-8 max-w-6xl w-full mx-auto">
             {activeTab === 'overview' && <OverviewTab />}
-            {activeTab === 'dimensions' && <DimensionsTab />}
-            {activeTab === 'confounds' && <ConfoundsTab />}
+            {activeTab === 'map' && <MapPhotosTab />}
             {activeTab === 'whatif' && <WhatIfTab />}
-            {activeTab === 'triage' && <TriageTab />}
+            {activeTab === 'exports' && <ExportsTab />}
           </div>
         </main>
       </div>
