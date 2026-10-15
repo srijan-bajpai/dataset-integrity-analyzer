@@ -190,3 +190,47 @@ def test_sample_image_endpoint(client):
     # Test 401 on unauthorized image request
     unauth_resp = client.get(f"/v1/datasets/{dataset_id}/samples/cats/cat1.png/image")
     assert unauth_resp.status_code == 401
+
+
+def test_embeddings_3d_endpoint(client, monkeypatch):
+    import dia.worker as worker
+    headers = {"X-DIA-Password": "test-secret"}
+    uploaded = client.post(
+        "/v1/datasets", headers=headers,
+        files={"file": ("dataset.zip", _dataset_zip(), "application/zip")},
+    )
+    dataset_id = uploaded.json()["id"]
+    queued = client.post(f"/v1/datasets/{dataset_id}/runs", headers=headers, json={})
+    run_id = queued.json()["run_id"]
+
+    monkeypatch.setattr(worker, "run_analysis", lambda *args, **kwargs: {
+        "report_version": "dia-report-v2",
+        "dataset_fingerprint": "fingerprint-3d",
+        "analyzer_versions": {"core": "test"},
+        "results": {"readiness": {"overall_score": 80}},
+        "findings": [],
+        "sample_findings": [],
+        "sample_results": [
+            {"sample_ref": "cats/sample.png", "metrics": {"cluster_id": 0, "flag_embedding_outlier": False}},
+            {"sample_ref": "dogs/sample.png", "metrics": {"cluster_id": 1, "flag_embedding_outlier": True, "embedding_outlier_score": 0.95}},
+        ],
+    })
+    assert worker.run_once() is True
+    res = client.get(f"/v1/runs/{run_id}/embeddings-3d", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["run_id"] == run_id
+    assert data["sample_count"] == 2
+    assert len(data["points"]) == 2
+    outliers = [p for p in data["points"] if p["is_outlier"]]
+    assert len(outliers) == 1
+    assert outliers[0]["sample_ref"] == "dogs/sample.png"
+
+
+def test_frontend_static_mount(client):
+    res = client.get("/")
+    assert res.status_code == 200
+    assert "Dataset Integrity Analyzer 2.0" in res.text
+    assert "<div id=\"root\"></div>" in res.text
+
+
