@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from dia.config import settings
 from dia.core.ingestion import DatasetValidationError, dataset_fingerprint, parse_dataset, safe_extract_zip
 from dia.db.models import AnalysisRun, Dataset, JobQueue, Sample, SampleResult
 from dia.db.session import get_db
+from dia.reports import format_datasheet_markdown, generate_datasheet, render_html_report
 from dia.scoring.readiness import ReadinessScorer
 
 app = FastAPI(
@@ -36,6 +37,7 @@ class RunRequest(BaseModel):
     class_fairness_targets: dict[str, dict[str, dict[str, float]]] = Field(default_factory=dict)
     metadata_schema: dict[str, dict[str, Any]] = Field(default_factory=dict)
     estimate_attributes: bool = False
+    predict_impact: bool = False
     sampling_rate: float = Field(default=1.0, gt=0, le=1)
     sampling_seed: int = 42
 
@@ -235,6 +237,7 @@ def create_run(dataset_id: str, request: RunRequest, db: Session = Depends(get_d
         "class_fairness_targets": request.class_fairness_targets,
         "metadata_schema": request.metadata_schema,
         "estimate_attributes": request.estimate_attributes,
+        "predict_impact": request.predict_impact,
         "sampling_rate": request.sampling_rate,
         "sampling_seed": request.sampling_seed,
     })
@@ -282,6 +285,65 @@ def get_report(run_id: str, db: Session = Depends(get_db)) -> Any:
     if run.status != "completed":
         raise HTTPException(status_code=409, detail=f"Run is {run.status}; report is available after completion.")
     return JSONResponse(content=run.report or {})
+
+
+@app.get("/v1/runs/{run_id}/report.html", dependencies=[Depends(require_password)])
+def get_report_html(run_id: str, db: Session = Depends(get_db)) -> HTMLResponse:
+    run = _run_or_404(db, run_id)
+    if run.status != "completed":
+        raise HTTPException(status_code=409, detail=f"Run is {run.status}; report is available after completion.")
+    return HTMLResponse(content=render_html_report(run.report or {}))
+
+
+@app.get("/v1/runs/{run_id}/model-card.json", dependencies=[Depends(require_password)])
+def get_model_card_json(run_id: str, db: Session = Depends(get_db)) -> JSONResponse:
+    run = _run_or_404(db, run_id)
+    if run.status != "completed":
+        raise HTTPException(status_code=409, detail=f"Run is {run.status}; model card is available after completion.")
+    return JSONResponse(content=generate_datasheet(run.report or {}))
+
+
+@app.get("/v1/runs/{run_id}/model-card.md", dependencies=[Depends(require_password)])
+def get_model_card_markdown(run_id: str, db: Session = Depends(get_db)) -> Response:
+    run = _run_or_404(db, run_id)
+    if run.status != "completed":
+        raise HTTPException(status_code=409, detail=f"Run is {run.status}; model card is available after completion.")
+    md_text = format_datasheet_markdown(run.report or {})
+    return Response(
+        md_text,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="dia-{run.id}-datasheet.md"'},
+    )
+
+
+@app.get("/v1/runs/{run_id}/remediation-manifest.csv", dependencies=[Depends(require_password)])
+def export_remediation_manifest_csv(run_id: str, db: Session = Depends(get_db)) -> Response:
+    run = _run_or_404(db, run_id)
+    if run.status != "completed":
+        raise HTTPException(status_code=409, detail="Run has not completed.")
+    report = run.report or {}
+    rows = report.get("remediation_manifest", [])
+    fieldnames = ["sample_ref", "action", "target_dimension", "reason", "current_label", "suggested_value"]
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    return Response(
+        output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="dia-{run.id}-remediation-manifest.csv"'},
+    )
+
+
+@app.get("/v1/runs/{run_id}/remediation-manifest.json", dependencies=[Depends(require_password)])
+def export_remediation_manifest_json(run_id: str, db: Session = Depends(get_db)) -> JSONResponse:
+    run = _run_or_404(db, run_id)
+    if run.status != "completed":
+        raise HTTPException(status_code=409, detail="Run has not completed.")
+    report = run.report or {}
+    rows = report.get("remediation_manifest", [])
+    return JSONResponse(content={"run_id": run.id, "total": len(rows), "items": rows})
 
 
 @app.get("/v1/runs/{run_id}/samples.csv", dependencies=[Depends(require_password)])

@@ -31,9 +31,20 @@ class FeatureExtractor:
         ])
         
     def extract(self, output_path: str = "embeddings.npy", progress_callback=None) -> np.ndarray:
-        embeddings = []
         paths = self.df['path'].tolist()
-        
+        output = Path(output_path)
+        if output.exists():
+            try:
+                cached = np.load(output)
+                if len(cached) == len(paths):
+                    if progress_callback:
+                        progress_callback(70, "Using cached image embeddings")
+                    self.df['embedding_ref'] = str(output)
+                    return cached
+            except Exception:
+                pass
+
+        embeddings = []
         print(f"Extracting embeddings for {len(paths)} samples on {self.device}...")
         
         with torch.no_grad():

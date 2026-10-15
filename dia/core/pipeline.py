@@ -55,6 +55,7 @@ def run_analysis(records: list[dict[str, Any]], *, targets: dict[str, dict[str, 
                  metadata_schema: dict[str, dict[str, Any]] | None = None,
                  warnings: list[str] | None = None, embeddings_path: Path | None = None,
                  use_embeddings: bool = True, estimate_attributes: bool = False,
+                 predict_impact: bool = False,
                  sampling_rate: float = 1.0, sampling_seed: int = 42,
                  dataset_fingerprint: str | None = None,
                  progress_callback=None) -> dict[str, Any]:
@@ -212,7 +213,7 @@ def run_analysis(records: list[dict[str, Any]], *, targets: dict[str, dict[str, 
             if len(labeled_for_audit) >= 2 and labeled_for_audit["ground_truth_class"].nunique() >= 2:
                 try:
                     results["labels"] = LabelAuditAnalyzer(labeled_for_audit, embeddings[labeled_positions]).run()
-                    for column in ("label_issue_prob", "flag_suspected_mislabel", "predicted_class"):
+                    for column in ("label_issue_prob", "flag_suspected_mislabel", "predicted_class", "flag_embedding_outlier", "embedding_outlier_score"):
                         if column in labeled_for_audit:
                             usable.loc[labeled_positions, column] = labeled_for_audit[column].to_numpy()
                 except Exception as exc:
@@ -238,7 +239,10 @@ def run_analysis(records: list[dict[str, Any]], *, targets: dict[str, dict[str, 
 
             for _, row in usable.iterrows():
                 sample_enrichment[str(row.get("sample_ref", row.get("id", "")))] = {
-                    key: _clean(row[key]) for key in ("cluster_id", "label_issue_prob", "flag_suspected_mislabel", "predicted_class") if key in row
+                    key: _clean(row[key]) for key in (
+                        "cluster_id", "label_issue_prob", "flag_suspected_mislabel", "predicted_class",
+                        "flag_embedding_outlier", "embedding_outlier_score", "flag_visual_outlier",
+                    ) if key in row
                 }
         except Exception as exc:
             embedding_dimensions = {"status": "unavailable", "reason": "Pretrained image features could not be loaded or computed."}
@@ -301,8 +305,9 @@ def run_analysis(records: list[dict[str, Any]], *, targets: dict[str, dict[str, 
                 "description": "An embedding-based classifier disagrees with some supplied labels. Treat these as review suggestions, not confirmed errors.",
             })
     results["readiness"] = ReadinessScorer().compute(results)
-    results["bias_impact"] = BiasImpactPredictor(results).predict()
-    results["recommendations"] = RecommendationEngine(results).generate()
+    results["bias_impact"] = BiasImpactPredictor(results, enabled=predict_impact).predict()
+    rec_engine = RecommendationEngine(results, df=usable)
+    results["recommendations"] = rec_engine.generate()
     progress(95, "Saving report")
 
     sample_findings = []
@@ -313,7 +318,7 @@ def run_analysis(records: list[dict[str, Any]], *, targets: dict[str, dict[str, 
         current = enriched.loc[ref] if ref in enriched.index else row
         metrics = {}
         for key, value in current.items():
-            if key.startswith(("quality_", "flag_", "label_", "predicted_", "duplicate_", "phash", "cluster_", "metadata_source:", "attribute_confidence:")):
+            if key.startswith(("quality_", "flag_", "label_", "predicted_", "duplicate_", "phash", "cluster_", "metadata_source:", "attribute_confidence:", "embedding_outlier_score")):
                 metrics[key] = _clean(value)
         metrics = {
             key: _clean(value) for key, value in metrics.items()
@@ -334,10 +339,14 @@ def run_analysis(records: list[dict[str, Any]], *, targets: dict[str, dict[str, 
         })
     for ref, row in enriched.iterrows():
         details = sample_enrichment.get(str(ref), {})
-        flags = [key for key in ("flag_blurred", "flag_underexposed", "flag_overexposed", "flag_low_contrast", "flag_low_resolution", "flag_duplicate", "flag_suspected_mislabel") if bool(row.get(key, False))]
+        flags = [key for key in (
+            "flag_blurred", "flag_underexposed", "flag_overexposed", "flag_low_contrast",
+            "flag_low_resolution", "flag_duplicate", "flag_suspected_mislabel",
+            "flag_embedding_outlier", "flag_visual_outlier",
+        ) if bool(row.get(key, False))]
         if row.get("anomaly_flags"):
             flags.extend(f"flag_{value}" for value in row.get("anomaly_flags", []))
-        if flags or details.get("flag_suspected_mislabel"):
+        if flags or details.get("flag_suspected_mislabel") or details.get("flag_embedding_outlier"):
             sample_findings.append({
                 "sample_ref": str(ref),
                 "ground_truth_class": _clean(row.get("ground_truth_class")),
@@ -345,6 +354,7 @@ def run_analysis(records: list[dict[str, Any]], *, targets: dict[str, dict[str, 
                 "predicted_class": details.get("predicted_class", _clean(row.get("predicted_class"))),
                 "label_issue_prob": details.get("label_issue_prob", _clean(row.get("label_issue_prob"))),
                 "duplicate_group": _clean(row.get("duplicate_group")),
+                "outlier_score": details.get("embedding_outlier_score", _clean(row.get("embedding_outlier_score"))),
             })
 
     report = _clean({
@@ -370,6 +380,7 @@ def run_analysis(records: list[dict[str, Any]], *, targets: dict[str, dict[str, 
         "findings": all_findings,
         "sample_findings": sample_findings,
         "sample_results": sample_results,
+        "remediation_manifest": rec_engine.generate_manifest(),
         "warnings": warnings or [],
         "analyzer_errors": errors,
     })

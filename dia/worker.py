@@ -120,6 +120,13 @@ def run_once() -> bool:
             except (ValueError, TypeError):
                 pass
             embed_path = settings.embeddings_dir / f"{run_id}.npy"
+            dataset_cache = settings.embeddings_dir / f"dataset_{dataset.id}.npy"
+            if float(config.get("sampling_rate", 1.0)) >= 1.0 and dataset_cache.exists() and not embed_path.exists():
+                import shutil
+                try:
+                    shutil.copy2(dataset_cache, embed_path)
+                except Exception:
+                    pass
             storage_path = Path(dataset.storage_path)
 
         def update_progress(percent: int, message: str) -> None:
@@ -142,6 +149,7 @@ def run_once() -> bool:
             warnings=warnings,
             embeddings_path=embed_path,
             estimate_attributes=config.get("estimate_attributes", False),
+            predict_impact=config.get("predict_impact", False),
             progress_callback=update_progress,
         )
 
@@ -165,6 +173,12 @@ def run_once() -> bool:
             run.findings = report.get("findings", [])
             run.analyzer_versions = report.get("analyzer_versions", {})
             run.embeddings_path = str(embed_path) if embed_path.exists() else None
+            if embed_path.exists() and float(config.get("sampling_rate", 1.0)) >= 1.0 and not dataset_cache.exists():
+                import shutil
+                try:
+                    shutil.copy2(embed_path, dataset_cache)
+                except Exception:
+                    pass
             run.duration_seconds = round(time.monotonic() - start, 3)
             run.status = "completed"
             run.progress_percent = 100

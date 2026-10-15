@@ -2,7 +2,7 @@
 
 DIA is a database-backed service for auditing image-classification datasets before model training. It accepts ZIP uploads containing class folders or a CSV/JSONL manifest, stores reproducible analysis runs, and returns machine-readable findings with sample-level evidence. Fairness results are review signals, not proof that a dataset or model is fair.
 
-The v2 backend is the active work on branch `dia_2.0_codex`. The Streamlit app remains a legacy local demo surface; frontend work will follow after the API contract stabilizes.
+The v2 backend is the active version. The Streamlit app remains a legacy local demo surface; frontend work will follow after the API contract stabilizes.
 
 ## What it measures
 
@@ -46,6 +46,8 @@ docker compose up --build
 Compose uses PostgreSQL and persistent named volumes for the database and uploaded data. The published API port binds to localhost by default. Place an HTTPS reverse proxy in front of any externally reachable deployment.
 
 ## Verify
+
+For a copy-and-paste walkthrough using the included sample images, follow the [Easy Test Guide](docs/TESTING_GUIDE.md).
 
 ```powershell
 python -m pytest -q

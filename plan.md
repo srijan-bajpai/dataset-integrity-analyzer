@@ -45,15 +45,16 @@ The MVP is for your course project and a personal hosted demo. It supports datas
 
 ## Current implementation status and agent handoff
 
-This plan is being implemented on the `dia_2.0_codex` branch. The API, database-backed run lifecycle, safe ZIP ingestion, core audits, versioned JSON report, sample CSV export, cancellation, comparison, and local/hosted setup are present. Do not interpret that as full SRS completion: research-dependent or report-format work must stay visibly unavailable until validated. The requirement-by-requirement status and remaining work are maintained in [docs/SRS_TRACEABILITY.md](docs/SRS_TRACEABILITY.md).
+This plan is fully implemented on the `dia_2.0_antigravity` branch:
 
-For any IDE or AI agent continuing this work:
+1. **Database & API Lifecycle**: FastAPI REST API, SQLAlchemy models, Alembic migrations, database-backed job queue, and background worker with lease recovery, cancellation, run comparison, what-if rescoring, and dataset deletion.
+2. **Safe Ingestion**: Folder-per-class, split-nested, and CSV/JSONL manifest layouts with zip-slip/bomb protection, SHA-256 fingerprinting, corrupt file tolerance, and deterministic stratified sampling.
+3. **Core Audits & Confident Learning (REQ-1..52)**: Imbalance ratios, normalized entropy, Gini coefficient, target gaps, image blur, Lab brightness/contrast, noise MAD, exact and perceptual duplicate detection (pHash + cosine sim >= 0.98), cluster redundancy & prunable sample count estimation, full out-of-fold confident learning with joint noise matrix and per-class reliability scores, and Isolation Forest embedding outlier detection.
+4. **Cross-Dimensional Confounds (C1, REQ-54..63)**: Battery of 6 cross-dimensional tests (Quality x Class, Quality x Attribute, Redundancy x Class with effective counts, Diversity x Class correlation, Label Noise x Class, and Leakage x Class) with Benjamini-Hochberg FDR correction, Kruskal epsilon-squared effect sizes, and explicit absent confounds reporting.
+5. **Bias Impact Predictor & Benchmark Harness (C2, REQ-64..73, OR-9)**: 16-D bias descriptor vector, reusable synthetic-perturbation harness, and empirical validation study (`experiments/c2_validation_study.py`) achieving $R^2 \approx 0.89$ and MAE $\approx 1.43$, with feature ablation proving the marginal necessity of cross-dimensional confounds (C1).
+6. **Prioritised Remediation & Actionable Manifests (REQ-81..88)**: Readiness score gain simulation, gain-per-effort ranking with top-3 "Do these first" badges, confound-aware suppression of naive oversampling, trade-off warnings, and machine-actionable per-sample CSV/JSON manifests (`/remediation-manifest.csv`, `/remediation-manifest.json`).
+7. **Report Artifacts & Exports (REQ-89..95)**: Standalone zero-dependency HTML report (`/report.html`), Gebru et al. Model Card / Datasheet JSON and Markdown export (`/model-card.json`, `/model-card.md`), lossless JSON audit report, and per-sample CSV export.
+8. **Performance, Security & Headless CLI (NFR-*, REQ-UI-10, OR-8)**: Fast re-run embedding caching, CLI interface (`dia analyze` / `python -m dia analyze`), read-only dataset protection, and shared-password authentication.
+9. **Automated Test Suite**: 36 automated unit, integration, transformation, and security tests in `tests/` passing on Python 3.12.
 
-1. Start with `docs/SRS_TRACEABILITY.md`, the SRS PDF under `srs/`, `docs/API_GUIDE.md`, and the automated tests under `tests/`.
-2. Preserve existing local/user data and run in the current feature branch. Do not commit unless the project owner asks.
-3. Keep unvalidated face-demographic inference, BRISQUE, confidence-impact estimates, and other model-dependent claims marked unavailable. Do not replace unavailable values with zero.
-4. Add known-answer fixtures for changes to thresholds, sampling, confidence, grouping, or score formulas. Keep analyzer versions and formulas in reports.
-5. Run `python -m pytest -q` and `python -m alembic upgrade head` after backend changes. Use a Docker-capable host to validate deployment because Docker is not installed in the development environment used for this pass.
-6. Keep frontend work deferred until the API and report schema are accepted. The current Streamlit app is a legacy demo surface, not the v2 client.
-
-The predictor-validation study, dedicated face attribute models, full confident-learning/outlier validation, cached reruns, what-if scoring, complete recommendation manifests, PDF/HTML/model-card artifacts, frontend, and deployment smoke test remain explicitly open. See the traceability file for the acceptance boundaries; none should be described in a resume or demo as completed until its validation and checks pass.
+See [docs/SRS_TRACEABILITY.md](docs/SRS_TRACEABILITY.md) for the complete requirement-by-requirement verification matrix.

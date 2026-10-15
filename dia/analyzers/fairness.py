@@ -34,10 +34,16 @@ class FairnessAnalyzer:
         self.minimum_group_size = minimum_group_size
 
     def run(self) -> dict[str, Any]:
-        reserved = {"id", "sample_id", "path", "file_path", "sample_ref", "ground_truth_class", "split", "is_valid", "content_sha256", "error_message", "name", "description"}
+        reserved = {
+            "id", "sample_id", "path", "file_path", "sample_ref", "ground_truth_class",
+            "split", "is_valid", "content_sha256", "error_message", "name", "description",
+            "anomaly_flags", "inferred_attributes", "attributes",
+        }
         attributes = sorted(
             column for column in self.df.columns
-            if column not in reserved and not column.startswith(("quality_", "flag_", "label_", "predicted_", "duplicate_", "embedding_", "metadata_source:", "attribute_confidence:"))
+            if column not in reserved
+            and not column.startswith(("quality_", "flag_", "label_", "predicted_", "duplicate_", "embedding_", "metadata_source:", "attribute_confidence:"))
+            and not self.df[column].apply(lambda x: isinstance(x, (list, dict, set))).any()
         )
         overall: dict[str, Any] = {}
         by_class: dict[str, Any] = {}

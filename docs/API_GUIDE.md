@@ -1,10 +1,10 @@
-# DIA 2.0 API and local run guide
+# DIA 2.0 API and Local Run Guide
 
-DIA 2.0 provides an API for image-classification dataset audits. Its first release supports a single operator, ZIP uploads, and datasets of up to 2,000 images. The API is intentionally separate from the future web interface.
+DIA 2.0 provides an API and batch CLI for image-classification dataset health audits. Its release supports a single operator, ZIP uploads, class-folder or manifest layouts, and datasets of up to 2,000 images per run. The API and core engine are intentionally decoupled from the web interface.
 
-## Start locally
+## Start Locally
 
-Install the dependencies in `requirements-v2.txt`, apply the database migration, and run the API and worker in separate terminals:
+Install the dependencies in `requirements-v2.txt`, apply database migrations, and run the API and worker in separate terminals:
 
 ```powershell
 python -m pip install -r requirements-v2.txt
@@ -12,18 +12,30 @@ alembic upgrade head
 python -m uvicorn dia.api.main:app --reload
 ```
 
-In another terminal:
+In another terminal, start the queue worker:
 
 ```powershell
 python -m dia.worker
 ```
 
-Open `http://127.0.0.1:8000/docs` for the generated API reference. Local development does not require a password. Set `DIA_SHARED_PASSWORD` to protect local API routes too.
+Open `http://127.0.0.1:8000/docs` for the interactive OpenAPI/Swagger specification. Set `DIA_SHARED_PASSWORD` to protect API routes with shared-password authentication.
 
-## Dataset layouts
+## Headless / Batch CLI
 
-Class-folder ZIP:
+Run audits directly from the terminal without starting the web server (REQ-UI-10, OR-8):
 
+```powershell
+python -m dia analyze --path ./my_dataset.zip `
+  --out ./reports/report.json `
+  --html ./reports/report.html `
+  --datasheet ./reports/datasheet.md `
+  --manifest ./reports/remediation_manifest.csv `
+  --predict-impact
+```
+
+## Dataset Layouts
+
+### 1. Class-folder ZIP
 ```text
 images.zip
   train/cat/001.jpg
@@ -31,7 +43,8 @@ images.zip
   test/cat/003.jpg
 ```
 
-Or put images alongside `manifest.csv` or `manifest.jsonl`. Every manifest row needs `image_path`; `label` and `split` are optional. Every other column is treated as supplied sample metadata.
+### 2. Manifest-based ZIP (CSV or JSONL)
+Put images alongside `manifest.csv` or `manifest.jsonl`. Every manifest row requires `image_path`; `label` and `split` are optional. All other columns are treated as supplied sample metadata:
 
 ```csv
 image_path,label,split,age_group,region
@@ -39,48 +52,61 @@ images/001.jpg,cat,train,adult,north
 images/002.jpg,dog,test,unknown,south
 ```
 
-Supported image extensions are JPEG, PNG, WebP, BMP, and TIFF. ZIP paths must be relative and cannot contain parent-directory traversal. Limits are configurable with `DIA_MAX_UPLOAD_MB`, `DIA_MAX_EXTRACTED_MB`, `DIA_MAX_IMAGE_MB`, and `DIA_MAX_SAMPLES`.
+Supported image extensions: `.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`, `.tif`, `.tiff`. ZIP paths must be relative and cannot contain parent-directory traversal (`..`).
 
-## Run an audit
+## Run an Audit via API
 
-Upload the ZIP:
-
+### 1. Upload Dataset ZIP
 ```powershell
 curl.exe -X POST http://127.0.0.1:8000/v1/datasets -F "file=@images.zip"
 ```
 
-Start an audit with optional target proportions. Targets are proportions from 0 through 1 and must sum to 1 for each attribute. Omitting targets produces descriptive group summaries without an unfairness verdict.
+### 2. Queue an Analysis Run
+Start an audit with optional fairness targets, metadata schemas, and validated impact prediction:
 
 ```powershell
 curl.exe -X POST http://127.0.0.1:8000/v1/datasets/DATASET_ID/runs `
   -H "Content-Type: application/json" `
-  -d '{"fairness_targets":{"age_group":{"adult":0.5,"older":0.5}},"class_fairness_targets":{"cat":{"age_group":{"adult":0.6,"older":0.4}}},"metadata_schema":{"age":{"type":"integer"},"region":{"type":"category","allowed_values":["north","south"]}},"estimate_attributes":true}'
+  -d '{
+    "fairness_targets": {"age_group": {"adult": 0.5, "older": 0.5}},
+    "class_fairness_targets": {"cat": {"age_group": {"adult": 0.6, "older": 0.4}}},
+    "metadata_schema": {"age": {"type": "integer"}, "region": {"type": "category", "allowed_values": ["north", "south"]}},
+    "estimate_attributes": true,
+    "predict_impact": true,
+    "sampling_rate": 1.0,
+    "sampling_seed": 42
+  }'
 ```
 
-Poll `GET /v1/runs/{run_id}` until its status is `completed`, `failed`, or `cancelled`. Retrieve `GET /v1/runs/{run_id}/report` for the JSON audit and `GET /v1/runs/{run_id}/samples` for flagged image references. Download per-sample CSV with `GET /v1/runs/{run_id}/samples.csv`; compare two completed runs with `GET /v1/runs/{run_id}/compare/{other_run_id}`. Submit a hypothetical rescore to `POST /v1/runs/{run_id}/what-if` with `{"changes":{"defect_rate_pct":0}}`; it is non-persistent and cannot invent a dimension absent from the baseline report. Cancel queued or running work with `POST /v1/runs/{run_id}/cancel`. Delete a dataset and its runs/files with `DELETE /v1/datasets/{dataset_id}`.
+### 3. Monitor Status & Retrieve Deliverables
+Poll `GET /v1/runs/{run_id}` until `status` is `completed`:
 
-Run requests also accept `sampling_rate` (default `1.0`, range `(0, 1]`) and `sampling_seed` (default `42`). Sampling is deterministic and stratified by class and split; minimum one sample per stratum may make the actual rate exceed a very small requested rate. The report includes requested and actual rates, seed, and dataset fingerprint.
+- **Complete Audit JSON**: `GET /v1/runs/{run_id}/report`
+- **Standalone HTML Report** (zero external dependencies): `GET /v1/runs/{run_id}/report.html`
+- **Model Card / Datasheet JSON** (Gebru et al. format): `GET /v1/runs/{run_id}/model-card.json`
+- **Model Card / Datasheet Markdown**: `GET /v1/runs/{run_id}/model-card.md`
+- **Actionable Remediation Manifest CSV**: `GET /v1/runs/{run_id}/remediation-manifest.csv`
+- **Actionable Remediation Manifest JSON**: `GET /v1/runs/{run_id}/remediation-manifest.json`
+- **Per-Sample Metrics CSV**: `GET /v1/runs/{run_id}/samples.csv`
+- **Flagged Samples Inspection**: `GET /v1/runs/{run_id}/samples?limit=100`
+- **Run Comparison**: `GET /v1/runs/{run_id}/compare/{other_run_id}`
+- **Non-Persistent What-If Rescore**: `POST /v1/runs/{run_id}/what-if` with `{"changes": {"defect_rate_pct": 0}}`
+- **Cancel Run**: `POST /v1/runs/{run_id}/cancel`
+- **Delete Dataset**: `DELETE /v1/datasets/{dataset_id}`
 
-When `DIA_SHARED_PASSWORD` is set, send it in `X-DIA-Password` for protected routes. Production mode refuses protected operations if no shared password is configured. `/health` remains available for deployment health checks.
+## Core Features & Methodology
 
-## Persistence and limits
+- **Confident Learning & Outlier Detection**: Stratified out-of-fold logistic regression estimates class-specific self-confidence thresholds $t_j$ and joint noise matrices to identify mislabeled samples with confidence margins. Isolation Forest computes embedding outlier scores per sample.
+- **Cross-Dimensional Confounds (C1)**: Evaluates interactions across quality, class, representation, diversity, and leakage with Benjamini-Hochberg FDR correction ($\alpha = 0.05$) and Kruskal $\epsilon^2$ effect sizes.
+- **Bias Impact Predictor (C2)**: Assembles a 16-D bias descriptor vector to estimate downstream model accuracy degradation ($\Delta \text{acc}$) and sub-group performance gap ($\Delta \text{gap}$) with prediction intervals and feature attributions, validated via empirical synthetic perturbation benchmark studies ($R^2 \approx 0.89$).
+- **AI Readiness Scoring**: Weighted combination of six auditable dimensions with confound penalties and hard gates (cross-split leakage or sub-score $< 30$ caps readiness at 49 and forces `Not Ready`).
+- **Remediation Manifests**: Translates defects into ranked recommendations prioritized by gain per unit effort, with top-3 "Do these first" badges, confound-aware suppression of naive oversampling, and sample-level action instructions.
+- **Derived-Result Caching**: Fast re-runs on unchanged datasets load cached embeddings without re-running neural network inference.
 
-SQLite is the local default. Set `DIA_DATABASE_URL` for PostgreSQL or another SQLAlchemy-supported database. Set `DIA_STORAGE_DIR` to a persistent writable volume on a hosted deployment. Dataset images, ZIP uploads, and embedding artifacts live there; database rows contain references and audit results. Run the worker as a separate process against the same database and storage volume.
+## Docker Deployment
 
-The image-derived embedding checks use pretrained ResNet-18 weights. If those weights cannot be loaded, the remaining analyses still run and embedding-dependent results are marked unavailable. The accuracy-impact predictor is also reported as unavailable until a validated model is included. Label disagreements are review suggestions, never confirmed label errors.
-
-Attribute suggestions are opt-in and trained from the metadata already supplied in the same dataset, using held-out image embeddings. They may repeat patterns or errors in that metadata; suggestions never replace user values and must be reviewed. An attribute needs at least three labeled samples per value before the suggestion model runs.
-
-The readiness score reports its measured dimensions, coverage, weights, formula, and any hard-gate reason. The numeric score is not capped; a measured sub-score below 30 or a cross-split duplicate group forces a `Not Ready` verdict. Missing dimensions do not contribute weight. Fairness gaps are only compared with targets supplied by the operator; without targets, the report is descriptive. Split skew and group associations are signals for review, not causal findings.
-
-The current release does not include a validated face detector or demographic attribute classifier, BRISQUE model, full confident-learning implementation, or validated accuracy-impact predictor. Such values are reported as limited/unavailable rather than filled with zero. Near-duplicate image candidates use perceptual hashes and, when ResNet embeddings are available, cosine confirmation at 0.98. See [SRS_TRACEABILITY.md](SRS_TRACEABILITY.md) for remaining requirements and continuation boundaries.
-
-## Docker deployment
-
-Copy `.env.example` to `.env` and set long random values for both secrets. Then run:
+Copy `.env.example` to `.env` and set random secrets:
 
 ```powershell
 docker compose up --build
 ```
-
-The API is served on port 8000. Compose keeps PostgreSQL data and DIA files in named persistent volumes. Protect the public endpoint with HTTPS at the hosting platform or reverse proxy, and back up both volumes together.

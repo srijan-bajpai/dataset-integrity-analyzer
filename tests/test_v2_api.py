@@ -102,6 +102,28 @@ def test_worker_persists_report_and_per_sample_metrics(client, monkeypatch):
     csv_response = client.get(f"/v1/runs/{run_id}/samples.csv", headers=headers)
     assert csv_response.status_code == 200
     assert "sample_ref,flag_blurred,quality_blur" in csv_response.text
+
+    html_res = client.get(f"/v1/runs/{run_id}/report.html", headers=headers)
+    assert html_res.status_code == 200
+    assert "<!DOCTYPE html>" in html_res.text
+    assert "Dataset Health Report" in html_res.text
+
+    model_card_json = client.get(f"/v1/runs/{run_id}/model-card.json", headers=headers)
+    assert model_card_json.status_code == 200
+    assert model_card_json.json()["schema_version"] == "datasheet-v1.0"
+
+    model_card_md = client.get(f"/v1/runs/{run_id}/model-card.md", headers=headers)
+    assert model_card_md.status_code == 200
+    assert "# Datasheet for Dataset" in model_card_md.text
+
+    manifest_csv = client.get(f"/v1/runs/{run_id}/remediation-manifest.csv", headers=headers)
+    assert manifest_csv.status_code == 200
+    assert "sample_ref,action,target_dimension" in manifest_csv.text
+
+    manifest_json = client.get(f"/v1/runs/{run_id}/remediation-manifest.json", headers=headers)
+    assert manifest_json.status_code == 200
+    assert "items" in manifest_json.json()
+
     scenario = client.post(f"/v1/runs/{run_id}/what-if", headers=headers, json={"changes": {"defect_rate_pct": 0}})
     assert scenario.status_code == 200
     assert scenario.json()["persisted"] is False
