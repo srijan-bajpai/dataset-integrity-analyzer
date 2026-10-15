@@ -96,11 +96,15 @@ echo -e "\n${YELLOW}==> [2/6] Preparing application directory at ${APP_DIR}...${
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [ "$SCRIPT_DIR" != "$APP_DIR" ]; then
-    echo "Copying files from $SCRIPT_DIR to $APP_DIR..."
+    echo "Syncing latest application files to $APP_DIR..."
+    rm -rf "$APP_DIR/dia" "$APP_DIR/frontend" "$APP_DIR/aws" "$APP_DIR/Dockerfile" "$APP_DIR/entrypoint.sh"
     cp -r "$SCRIPT_DIR"/* "$APP_DIR"/
     cp -r "$SCRIPT_DIR"/.env.example "$APP_DIR"/.env.example 2>/dev/null || true
     cp -r "$SCRIPT_DIR"/.dockerignore "$APP_DIR"/.dockerignore 2>/dev/null || true
 fi
+
+# Extra safety: remove any leftover orphaned migrations
+rm -f "$APP_DIR"/dia/db/migrations/versions/0003_fingerprint_and_ingestion_metadata.py
 
 cd "$APP_DIR"
 
@@ -155,8 +159,9 @@ systemctl enable dia.service
 
 # 5. Build and Launch Containers
 echo -e "\n${YELLOW}==> [5/6] Building and launching DIA Docker containers...${NC}"
-docker compose down || true
-docker compose up -d --build
+docker compose down -v 2>/dev/null || docker compose down || true
+docker compose build --no-cache api worker
+docker compose up -d
 
 # 6. Verify Health
 echo -e "\n${YELLOW}==> [6/6] Verifying system health check...${NC}"

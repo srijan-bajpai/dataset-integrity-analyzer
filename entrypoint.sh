@@ -27,8 +27,8 @@ EOF
 }
 
 run_migrations() {
-    echo "==> Running database migrations (alembic upgrade head)..."
-    alembic upgrade head
+    echo "==> Running database migrations (alembic upgrade heads)..."
+    alembic upgrade heads || alembic upgrade head
 }
 
 MODE="${1:-all-in-one}"
