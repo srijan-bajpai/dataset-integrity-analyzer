@@ -35,3 +35,18 @@ Develop a unified AI dataset health assessment framework that evaluates datasets
 ## Next Actions
 1. Set up the Python project structure and `requirements.txt`.
 2. Implement the C2 Feasibility Spike (`experiments/c2_spike.py`) to validate the core research contribution.
+
+## DIA 2.0 Frontend Milestone (COMPLETED)
+- Implemented full production Web Studio in `frontend/` matching `dia_frontend_architecture_ideation_plan.md` and Pocock skills (`strict-typescript`, `runtime-validation`, `state-resilience`, `component-architecture`, `tailwind-craft`).
+- Architecture: React 18, TypeScript (strict, zero errors), Tailwind CSS, Three.js 3D WebGL, Zod runtime validation, and Vite static bundler.
+- Features:
+  - Multi-tab studio: Overview & Readiness, 6 Dimensions, Confounds (C1), What-If Simulator (C2), Sample Triage & Exports.
+  - Interactive 3D Embedding & Outlier Cluster Explorer in Three.js with raycast sample thumbnails, orbit drag, zoom, and outlier halos.
+  - 3D perspective tilt cards with spring physics and dynamic specular glare.
+  - 6x2 C1 Bivariate interaction risk matrix with 3D elevation on hover and slide-out plain English drawers.
+  - Real-time What-If sandbox sliders with score delta animations and 1-click fix presets.
+  - Dual audience toggle (Plain English / ELI5 vs. Technical / Stats).
+  - G1 Frictionless demo mode with password unlock modal.
+  - Direct 1-click downloads for standalone HTML report, Model Card Datasheet (MD/JSON), and Remediation Manifest CSV.
+  - Automated integration test suite: 39 pytest tests passing (including 3D embeddings endpoint and static SPA mount).
+
