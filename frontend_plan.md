@@ -158,3 +158,135 @@ Following [mattpocock/skills](https://github.com/mattpocock/skills), we incorpor
 - **Milestone 5**: Advanced Analytics (C1 Confound Matrix, C2 Impact Simulator, What-If live rescoring).
 - **Milestone 6**: Remediation Manifest, Flagged Sample Explorer & Export Hub (Action cards, filterable table, download triggers).
 - **Milestone 7**: End-to-End Integration, Resilience & Visual Polish (Dark mode, keyboard navigation, empty/loading skeletons, Cypress/Playwright or vitest testing).
+
+---
+
+## 8. Architecture Decision Records (ADRs)
+
+### ADR-001: Client Architecture (Vite SPA vs. Next.js App Router)
+- **Context**: The backend is a self-contained FastAPI service deployed locally or via Docker. The frontend needs to be fast, responsive, and easy to deploy.
+- **Decision**: Provide support for a **Vite + React 19 + TypeScript + Tailwind CSS** architecture with static export into FastAPI's `storage/static` or dedicated `frontend/dist/`. This allows DIA to be run either as a standalone frontend dev server (`npm run dev`) or as a single Python command (`python -m dia run --with-ui`) with zero Node dependencies in production.
+- **Consequences**: Fast hot-module reloading, seamless integration with Python Docker images, and zero Node runtime required on host servers.
+
+### ADR-002: Zod Schema Boundary Validation
+- **Context**: Following Matt Pocock's `runtime-validation` skill, untyped API payloads from HTTP endpoints are a primary source of silent UI bugs.
+- **Decision**: All API responses (`/v1/datasets`, `/v1/runs/{id}`, `/v1/runs/{id}/report`, `/v1/runs/{id}/what-if`) must pass through Zod schemas. TypeScript types will be inferred directly using `z.infer<typeof Schema>`.
+- **Consequences**: API contract drift is detected immediately at runtime with clear console warnings, rather than causing cryptic `undefined is not an object` errors in UI components.
+
+### ADR-003: Strict 5-State Component Contract
+- **Context**: Per Pocock's `state-resilience` skill, incomplete state handling causes Cumulative Layout Shift (CLS) and poor user experience.
+- **Decision**: Every presentation card and view container must explicitly define behavior for:
+  1. `Ideal`: Complete data loaded.
+  2. `Loading`: Geometric pulse skeletons (`animate-pulse`) mirroring incoming layout.
+  3. `Empty`: Visual illustration, helpful copy, and a direct CTA.
+  4. `Error`: Non-raw error description with an inline `[Retry]` button.
+  5. `Partial`: Resilient fallbacks for unassessed dimensions or missing metadata.
+
+### ADR-004: In-Browser Curated Export Pipeline
+- **Context**: Users need more than passive reporting; they want to easily act on findings.
+- **Decision**: The Remediation Center will provide both machine-actionable files (`remediation-manifest.csv`, `datasheet.md`) and a one-click **"Apply Fixes & Download Curated Dataset"** button that leverages DIA's manifest instructions to generate a clean ZIP archive.
+
+---
+
+## 9. Tracer-Bullet Tickets (`to-tickets`)
+
+Following Matt Pocock's `to-tickets` discipline, the project is broken down into atomic, dependency-linked tracer-bullet tickets:
+
+```
+[TICKET-01: Foundations & Theming]
+         │
+         ▼
+[TICKET-02: Zod API Client & State]
+         │
+    ┌────┴──────────────────────────┐
+    ▼                               ▼
+[TICKET-03: Header & Nav]     [TICKET-04: Ingestion Wizard]
+    │                               │
+    └────┬──────────────────────────┘
+         ▼
+[TICKET-05: Real-Time Audit Stepper]
+         │
+         ▼
+[TICKET-06: Hero Readiness Gauge]
+         │
+         ▼
+[TICKET-07: 6-Dimension Health Grid]
+         │
+    ┌────┴──────────────────────────┐
+    ▼                               ▼
+[TICKET-08: Confound Matrix]   [TICKET-09: What-If Studio]
+    │                               │
+    └────┬──────────────────────────┘
+         ▼
+[TICKET-10: Visual Sample Inspector]
+         │
+         ▼
+[TICKET-11: Remediation Manifest & Export Center]
+```
+
+### Ticket Details
+
+* **`TICKET-01`**: **Project Scaffolding & Design Tokens**
+  - *Files*: `package.json`, `tailwind.config.js`, `src/index.css`.
+  - *Blocked by*: None.
+  - *Deliverable*: React 19 + TypeScript + Tailwind CSS setup with Slate/Zinc neutral tokens and Emerald/Sky/Amber/Rose readiness tokens.
+
+* **`TICKET-02`**: **Type-Safe API Client & Zod Schemas**
+  - *Files*: `src/lib/schemas.ts`, `src/lib/api.ts`, `src/lib/types.ts`.
+  - *Blocked by*: `TICKET-01`.
+  - *Deliverable*: Colocated Zod schemas validating `/v1/datasets`, `/v1/runs/{id}`, `/v1/runs/{id}/report`, `/v1/runs/{id}/what-if` with discriminated union state helpers.
+
+* **`TICKET-03`**: **App Header, Audience Switch & Theme Controls**
+  - *Files*: `src/components/layout/Header.tsx`, `src/components/layout/AudienceToggle.tsx`.
+  - *Blocked by*: `TICKET-01`.
+  - *Deliverable*: Persistent header with brand icon, dark/light theme switch, and Stakeholder (ELI5) vs. Engineer (Deep Dive) mode toggle.
+
+* **`TICKET-04`**: **Dataset Upload & Ingestion Wizard**
+  - *Files*: `src/components/upload/Dropzone.tsx`, `src/components/upload/ConfigDrawer.tsx`.
+  - *Blocked by*: `TICKET-02`.
+  - *Deliverable*: Drag-and-drop ZIP upload with client-side size checks, class & split preview, and audit configuration builder (fairness targets, sampling slider).
+
+* **`TICKET-05`**: **Audit Progress Stepper & Job Monitor**
+  - *Files*: `src/components/audit/AuditProgress.tsx`.
+  - *Blocked by*: `TICKET-02`.
+  - *Deliverable*: Real-time polling component with animated pipeline steps (Embeddings ➔ Metrics ➔ Confident Learning ➔ Confounds ➔ Readiness) and Cancel button.
+
+* **`TICKET-06`**: **Hero AI Readiness Gauge & Safety Banners**
+  - *Files*: `src/components/readiness/ReadinessGauge.tsx`, `src/components/readiness/HardGateAlert.tsx`.
+  - *Blocked by*: `TICKET-02`.
+  - *Deliverable*: Animated circular SVG gauge (0–100), dynamic status chip, hard-gate alerts, and dynamic ELI5 diagnosis text.
+
+* **`TICKET-07`**: **Unified 6-Dimension Health Cards (C1 Scale)**
+  - *Files*: `src/components/dimensions/DimensionGrid.tsx`, `src/components/dimensions/DimensionCard.tsx`.
+  - *Blocked by*: `TICKET-02`.
+  - *Deliverable*: Reconciled 0–100 progress bars for Balance, Fairness, Quality, Uniqueness, Diversity, and Label Integrity with weight badges and status pills.
+
+* **`TICKET-08`**: **Cross-Dimensional Confound Matrix (C1)**
+  - *Files*: `src/components/confounds/ConfoundMatrix.tsx`.
+  - *Blocked by*: `TICKET-07`.
+  - *Deliverable*: Bivariate interaction matrix (Quality × Class, Redundancy × Class, etc.) with effect sizes ($\epsilon^2$) and FDR $q$-values.
+
+* **`TICKET-09`**: **Interactive What-If Rescoring Studio**
+  - *Files*: `src/components/simulator/WhatIfStudio.tsx`, `src/components/simulator/MetricSlider.tsx`.
+  - *Blocked by*: `TICKET-06`.
+  - *Deliverable*: Debounced sliders calling `/v1/runs/{id}/what-if` with live readiness delta recalculation (`+14.2 pts`) and preset recipe buttons.
+
+* **`TICKET-10`**: **Visual Sample Inspector & Side-by-Side Diffing**
+  - *Files*: `src/components/samples/SampleInspector.tsx`, `src/components/samples/DuplicateDiff.tsx`.
+  - *Blocked by*: `TICKET-02`.
+  - *Deliverable*: Side-by-side image comparison for cross-split duplicates (pHash similarity) and label noise preview (ground truth vs. predicted).
+
+* **`TICKET-11`**: **Prioritized Action Manifest & Export Hub**
+  - *Files*: `src/components/manifest/ActionCards.tsx`, `src/components/manifest/ExportHub.tsx`.
+  - *Blocked by*: `TICKET-07`.
+  - *Deliverable*: Top 3 "DO THIS FIRST" cards ranked by gain/effort, filterable manifest table, and 1-click download triggers (CSV, JSON, Gebru Datasheet, Standalone HTML).
+
+---
+
+## 10. Verification & Quality Gates
+
+Following Pocock's `verification-loop` skill:
+1. **TypeScript Typecheck**: `tsc --noEmit` must pass with zero errors and zero `any`.
+2. **Lint & Formatting**: ESLint and Prettier checks with no unused variables.
+3. **State Coverage**: Every view tested for the 5 UI states (Ideal, Loading skeleton, Empty, Error with retry, Partial).
+4. **Backend Integration**: Automated pytest suite (`pytest tests/`) validating CORS, image retrieval, and report endpoints.
