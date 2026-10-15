@@ -1,6 +1,7 @@
 import {
   DatasetListSchema,
   DatasetSchema,
+  DatasetDetailSchema,
   RunSchema,
   ReportSchema,
   WhatIfResponseSchema,
@@ -10,6 +11,7 @@ import {
 } from './schemas';
 import type {
   Dataset,
+  DatasetDetail,
   AnalysisRun,
   ReportData,
   WhatIfResponse,
@@ -62,12 +64,23 @@ class ApiClient {
     return DatasetListSchema.parse(data) as Dataset[];
   }
 
-  async getDataset(id: string, password?: string | null): Promise<Dataset> {
+  async verifyPassword(password: string): Promise<boolean> {
+    try {
+      const res = await fetch('/v1/datasets', {
+        headers: this.getHeaders(password),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async getDataset(id: string, password?: string | null): Promise<DatasetDetail> {
     const res = await fetch(`/v1/datasets/${encodeURIComponent(id)}`, {
       headers: this.getHeaders(password),
     });
     const data = await this.handleResponse<unknown>(res);
-    return DatasetSchema.parse(data) as Dataset;
+    return DatasetDetailSchema.parse(data) as DatasetDetail;
   }
 
   async uploadDataset(file: File, name?: string, password?: string | null): Promise<Dataset> {

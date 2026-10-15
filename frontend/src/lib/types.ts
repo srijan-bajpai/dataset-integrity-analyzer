@@ -13,6 +13,16 @@ export interface Dataset {
   description?: string;
 }
 
+export interface DatasetRunSummary {
+  id: string;
+  status: string;
+  created_at?: string | null;
+}
+
+export interface DatasetDetail extends Dataset {
+  runs: DatasetRunSummary[];
+}
+
 export interface AnalysisRun {
   id: string;
   dataset_id: string;
@@ -44,16 +54,49 @@ export interface ReadinessScore {
 }
 
 export interface ConfoundInteraction {
-  name: string;
-  variable_a: string;
-  variable_b: string;
-  status: 'significant_risk' | 'verified_safe' | 'limited_data';
-  effect_size: number | null;
-  p_value: number | null;
-  q_value: number | null;
-  description: string;
-  plain_english_explanation: string;
-  remedy_suggestion: string;
+  code?: string;
+  type?: string;
+  name?: string;
+  variable_a?: string;
+  variable_b?: string;
+  dimension_a?: string;
+  dimension_b?: string;
+  status: 'significant_risk' | 'verified_safe' | 'limited_data' | string;
+  severity?: 'critical' | 'warning' | 'review' | string;
+  statistic?: number | null;
+  p_value_raw?: number | null;
+  p_value_corrected?: number | null;
+  effect_size_epsilon_squared?: number | null;
+  effect_size_cramers_v?: number | null;
+  effect_size?: number | null;
+  p_value?: number | null;
+  q_value?: number | null;
+  description?: string;
+  downstream_consequence?: string;
+  plain_english_explanation?: string;
+  remedy_suggestion?: string;
+  affected_group?: string;
+  affected_sample_count?: number;
+  duplicate_rate?: number;
+  disagreement_rate?: number;
+  leaked_sample_count?: number;
+}
+
+export interface RecommendationItem {
+  category: string;
+  action_type: string;
+  priority: string;
+  defect: string;
+  affected_sample_count: number;
+  projected_score_gain: number;
+  estimated_effort: string;
+  machine_actionable: boolean;
+  rationale: string;
+  action: string;
+  trade_off_risk: string;
+  gain_per_effort?: number;
+  do_first?: boolean;
+  rank?: number;
 }
 
 export interface RecommendationManifestItem {
@@ -140,7 +183,10 @@ export interface ReportData {
     };
     confounds?: {
       detected_confounds?: ConfoundInteraction[];
+      tested_confounds?: string[];
+      absent_confounds?: string[];
       status?: string;
+      correction?: string;
     };
     bias_impact?: {
       enabled: boolean;
@@ -149,6 +195,7 @@ export interface ReportData {
       worst_affected_subgroup?: string;
       projected_recovered_accuracy_pct?: number;
     };
+    recommendations?: RecommendationItem[];
   };
   findings: Array<{
     code: string;

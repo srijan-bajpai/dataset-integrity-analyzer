@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+export const DatasetRunSummarySchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  created_at: z.string().nullable().optional(),
+}).passthrough();
+
 export const DatasetSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -11,7 +17,11 @@ export const DatasetSchema = z.object({
   status: z.string().default('ingested'),
   created_at: z.string().nullable().optional(),
   description: z.string().optional(),
-});
+}).passthrough();
+
+export const DatasetDetailSchema = DatasetSchema.extend({
+  runs: z.array(DatasetRunSummarySchema).default([]),
+}).passthrough();
 
 export const DatasetListSchema = z.array(DatasetSchema);
 
@@ -27,7 +37,7 @@ export const RunSchema = z.object({
   duration_seconds: z.number().nullable().optional(),
   error_message: z.string().nullable().optional(),
   report_url: z.string().nullable().optional(),
-});
+}).passthrough();
 
 export const DimensionScoreItemSchema = z.object({
   score: z.number().default(0),
@@ -44,16 +54,49 @@ export const ReadinessScoreSchema = z.object({
 }).passthrough();
 
 export const ConfoundInteractionSchema = z.object({
-  name: z.string().default(''),
-  variable_a: z.string().default(''),
-  variable_b: z.string().default(''),
+  code: z.string().optional(),
+  type: z.string().optional(),
+  name: z.string().optional(),
+  variable_a: z.string().optional(),
+  variable_b: z.string().optional(),
+  dimension_a: z.string().optional(),
+  dimension_b: z.string().optional(),
   status: z.string().default('verified_safe'),
+  severity: z.string().optional(),
+  statistic: z.number().nullable().optional(),
+  p_value_raw: z.number().nullable().optional(),
+  p_value_corrected: z.number().nullable().optional(),
+  effect_size_epsilon_squared: z.number().nullable().optional(),
+  effect_size_cramers_v: z.number().nullable().optional(),
   effect_size: z.number().nullable().optional(),
   p_value: z.number().nullable().optional(),
   q_value: z.number().nullable().optional(),
   description: z.string().default(''),
-  plain_english_explanation: z.string().optional().default(''),
-  remedy_suggestion: z.string().optional().default(''),
+  downstream_consequence: z.string().optional(),
+  plain_english_explanation: z.string().optional(),
+  remedy_suggestion: z.string().optional(),
+  affected_group: z.string().optional(),
+  affected_sample_count: z.number().optional(),
+  duplicate_rate: z.number().optional(),
+  disagreement_rate: z.number().optional(),
+  leaked_sample_count: z.number().optional(),
+}).passthrough();
+
+export const RecommendationSchema = z.object({
+  category: z.string().default(''),
+  action_type: z.string().default(''),
+  priority: z.string().default('Medium'),
+  defect: z.string().default(''),
+  affected_sample_count: z.number().default(0),
+  projected_score_gain: z.number().default(0),
+  estimated_effort: z.string().default('Medium'),
+  machine_actionable: z.boolean().default(false),
+  rationale: z.string().default(''),
+  action: z.string().default(''),
+  trade_off_risk: z.string().default(''),
+  gain_per_effort: z.number().optional(),
+  do_first: z.boolean().optional(),
+  rank: z.number().optional(),
 }).passthrough();
 
 export const ManifestItemSchema = z.object({
@@ -88,9 +131,13 @@ export const ReportSchema = z.object({
     labels: z.record(z.any()).optional(),
     confounds: z.object({
       detected_confounds: z.array(ConfoundInteractionSchema).default([]),
+      tested_confounds: z.array(z.string()).default([]),
+      absent_confounds: z.array(z.string()).default([]),
       status: z.string().optional(),
+      correction: z.string().optional(),
     }).passthrough().optional(),
     bias_impact: z.record(z.any()).optional(),
+    recommendations: z.array(RecommendationSchema).optional(),
   }).passthrough().default({}),
   findings: z.array(z.object({
     code: z.string(),
@@ -104,9 +151,9 @@ export const ReportSchema = z.object({
 
 export const WhatIfResponseSchema = z.object({
   run_id: z.string(),
-  baseline_score: z.number(),
-  what_if_score: z.number(),
-  score_delta: z.number().default(0),
+  baseline_score: z.number().nullable().optional(),
+  what_if_score: z.number().default(0),
+  score_delta: z.number().nullable().default(0),
   readiness: ReadinessScoreSchema,
   changes: z.record(z.number()).default({}),
   interpretation: z.string().default(''),

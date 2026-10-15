@@ -25,7 +25,7 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
   runId,
   datasetId,
 }) => {
-  const { password } = useApp();
+  const { password, theme } = useApp();
   const mountRef = useRef<HTMLDivElement>(null);
 
   const [data, setData] = useState<Embeddings3DResponse | null>(null);
@@ -36,6 +36,11 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'outliers_only' | 'inliers_only'>('all');
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
+  const autoRotateRef = useRef<boolean>(autoRotate);
+
+  useEffect(() => {
+    autoRotateRef.current = autoRotate;
+  }, [autoRotate]);
 
   // Load 3D coordinates
   const loadData = useCallback(async () => {
@@ -64,8 +69,9 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
     const height = container.clientHeight || 450;
 
     // Scene & Camera
+    const isDark = theme !== 'light';
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x09090b); // zinc-950
+    scene.background = new THREE.Color(isDark ? 0x09090b : 0xf4f4f5); // zinc-950 or zinc-100
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
     camera.position.set(0, 5, 18);
@@ -79,33 +85,53 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
     container.appendChild(renderer.domElement);
 
     // Ambient & Directional Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+    const ambientLight = new THREE.AmbientLight(0xffffff, isDark ? 0.9 : 1.2);
     scene.add(ambientLight);
 
-    const pointLight = new THREE.PointLight(0x6366f1, 2.5, 50);
+    const pointLight = new THREE.PointLight(0x6366f1, isDark ? 2.5 : 1.8, 50);
     pointLight.position.set(10, 15, 10);
     scene.add(pointLight);
 
     // Coordinate Grid & Wireframe Orbit Ring
-    const gridHelper = new THREE.GridHelper(16, 16, 0x27272a, 0x18181b);
+    const gridHelper = new THREE.GridHelper(16, 16, isDark ? 0x27272a : 0xd4d4d8, isDark ? 0x18181b : 0xe4e4e7);
     gridHelper.position.y = -4;
     scene.add(gridHelper);
 
-    // Collect Unique Classes for Color Mapping
+    // Shared Materials & Geometries to prevent WebGL memory exhaustion
     const uniqueClasses = Array.from(new Set(data.points.map(p => p.ground_truth_class))).sort();
-    const classColorMap = new Map<string, THREE.Color>();
+    const classMaterialsMap = new Map<string, THREE.MeshStandardMaterial>();
     uniqueClasses.forEach((cls, i) => {
-      classColorMap.set(cls, new THREE.Color(CLASS_PALETTE[i % CLASS_PALETTE.length]));
+      const color = new THREE.Color(CLASS_PALETTE[i % CLASS_PALETTE.length]);
+      classMaterialsMap.set(cls, new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.35,
+        metalness: 0.2,
+      }));
+    });
+
+    const outlierMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0xf43f5e),
+      roughness: 0.3,
+      metalness: 0.2,
+      emissive: new THREE.Color(0x881337),
+      emissiveIntensity: 0.8,
+    });
+
+    const sphereGeo = new THREE.SphereGeometry(0.24, 16, 16);
+    const outlierGeo = new THREE.SphereGeometry(0.38, 16, 16);
+    const haloGeo = new THREE.RingGeometry(0.45, 0.58, 24);
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: 0xf43f5e,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.7,
     });
 
     // Mesh Group for Interactivity
     const pointGroup = new THREE.Group();
     scene.add(pointGroup);
 
-    // Create interactive sphere meshes
     const meshes: { mesh: THREE.Mesh; point: Point3D }[] = [];
-    const sphereGeo = new THREE.SphereGeometry(0.24, 16, 16);
-    const outlierGeo = new THREE.SphereGeometry(0.38, 16, 16);
 
     const visiblePoints = data.points.filter(p => {
       if (filterMode === 'outliers_only') return p.is_outlier;
@@ -114,14 +140,9 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
     });
 
     visiblePoints.forEach(p => {
-      const color = p.is_outlier ? new THREE.Color(0xf43f5e) : (classColorMap.get(p.ground_truth_class) || new THREE.Color(0x6366f1));
-      const mat = new THREE.MeshStandardMaterial({
-        color,
-        roughness: 0.3,
-        metalness: 0.2,
-        emissive: p.is_outlier ? new THREE.Color(0x881337) : new THREE.Color(0x000000),
-        emissiveIntensity: p.is_outlier ? 0.8 : 0,
-      });
+      const mat = p.is_outlier
+        ? outlierMat
+        : (classMaterialsMap.get(p.ground_truth_class) || outlierMat);
 
       const mesh = new THREE.Mesh(p.is_outlier ? outlierGeo : sphereGeo, mat);
       mesh.position.set(p.x, p.y, p.z);
@@ -130,19 +151,15 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
 
       // Outlier pulsing wireframe halo
       if (p.is_outlier) {
-        const haloGeo = new THREE.RingGeometry(0.45, 0.58, 24);
-        const haloMat = new THREE.MeshBasicMaterial({
-          color: 0xf43f5e,
-          side: THREE.DoubleSide,
-          transparent: true,
-          opacity: 0.7,
-        });
         const halo = new THREE.Mesh(haloGeo, haloMat);
         halo.position.set(p.x, p.y, p.z);
         halo.lookAt(camera.position);
         pointGroup.add(halo);
       }
     });
+
+    // Cached array of mesh objects for high-performance raycasting
+    const interactiveMeshes = meshes.map(m => m.mesh);
 
     // Orbit Drag Interaction State
     let isDragging = false;
@@ -156,6 +173,9 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
       prevMouseX = e.clientX;
       prevMouseY = e.clientY;
     };
+
+    const raycaster = new THREE.Raycaster();
+    const mouseVec = new THREE.Vector2();
 
     const onMouseMove = (e: MouseEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -172,10 +192,9 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
         prevMouseX = e.clientX;
         prevMouseY = e.clientY;
       } else {
-        // Raycast for hover tooltip
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
-        const intersects = raycaster.intersectObjects(meshes.map(m => m.mesh));
+        mouseVec.set(mouseX, mouseY);
+        raycaster.setFromCamera(mouseVec, camera);
+        const intersects = raycaster.intersectObjects(interactiveMeshes);
 
         if (intersects.length > 0) {
           const hit = meshes.find(m => m.mesh === intersects[0].object);
@@ -210,7 +229,7 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
     const animate = () => {
       animId = requestAnimationFrame(animate);
 
-      if (autoRotate && !isDragging) {
+      if (autoRotateRef.current && !isDragging) {
         pointGroup.rotation.y += 0.0025;
       }
 
@@ -247,8 +266,12 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
       renderer.dispose();
       sphereGeo.dispose();
       outlierGeo.dispose();
+      haloGeo.dispose();
+      haloMat.dispose();
+      outlierMat.dispose();
+      classMaterialsMap.forEach(mat => mat.dispose());
     };
-  }, [data, filterMode, autoRotate]);
+  }, [data, filterMode]);
 
   if (loading) {
     return (
@@ -280,23 +303,23 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
   const outlierCount = data.points.filter(p => p.is_outlier).length;
 
   return (
-    <div className="relative w-full rounded-2xl glass-panel border border-zinc-800 overflow-hidden shadow-2xl">
+    <div className="relative w-full rounded-2xl glass-panel border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-2xl">
       {/* Visualizer Top Bar Telemetry */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-zinc-800/80 bg-zinc-950/70">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-950/70">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-indigo-400" />
-          <h4 className="text-xs font-semibold text-zinc-200 font-sans">
+          <Sparkles className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+          <h4 className="text-xs font-semibold text-zinc-900 dark:text-zinc-200 font-sans">
             Interactive 3D Embedding & Outlier Space
           </h4>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-mono">
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono">
             {data.sample_count} points
           </span>
           {data.has_real_embeddings ? (
-            <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
               ResNet-18 PCA (PC1: {(data.variance_explained[0] * 100).toFixed(0)}%, PC2: {(data.variance_explained[1] * 100).toFixed(0)}%)
             </span>
           ) : (
-            <span className="text-[10px] text-sky-400 font-mono bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">
+            <span className="text-[10px] text-sky-700 dark:text-sky-400 font-mono bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">
               Geometric Metric Projection
             </span>
           )}
@@ -304,11 +327,13 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
 
         {/* View Controls */}
         <div className="flex items-center gap-2 text-xs">
-          <div className="flex items-center rounded-lg bg-zinc-900 border border-zinc-800 p-0.5">
+          <div className="flex items-center rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-0.5">
             <button
               onClick={() => setFilterMode('all')}
               className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
-                filterMode === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                filterMode === 'all'
+                  ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
               }`}
             >
               All ({data.sample_count})
@@ -316,7 +341,9 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
             <button
               onClick={() => setFilterMode('outliers_only')}
               className={`px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center gap-1 ${
-                filterMode === 'outliers_only' ? 'bg-rose-500/20 text-rose-300 font-semibold' : 'text-zinc-400 hover:text-rose-400'
+                filterMode === 'outliers_only'
+                  ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
@@ -325,7 +352,9 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
             <button
               onClick={() => setFilterMode('inliers_only')}
               className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
-                filterMode === 'inliers_only' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                filterMode === 'inliers_only'
+                  ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
               }`}
             >
               Inliers
@@ -336,8 +365,8 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
             onClick={() => setAutoRotate(prev => !prev)}
             className={`p-1.5 rounded-lg border text-xs transition-colors ${
               autoRotate
-                ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-300'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                ? 'bg-indigo-600/15 dark:bg-indigo-600/20 border-indigo-500/40 text-indigo-700 dark:text-indigo-300'
+                : 'bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400'
             }`}
             title="Toggle 3D auto rotation"
           >
@@ -349,42 +378,42 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
       {/* 3D WebGL Canvas Container */}
       <div
         ref={mountRef}
-        className="w-full h-[440px] cursor-grab active:cursor-grabbing relative overflow-hidden bg-zinc-950"
+        className="w-full h-[440px] cursor-grab active:cursor-grabbing relative overflow-hidden bg-zinc-100 dark:bg-zinc-950"
       />
 
       {/* Floating Hover Tooltip */}
       {hoveredPoint && tooltipPos && (
         <div
-          className="absolute pointer-events-none z-30 p-3 rounded-xl glass-panel border border-zinc-700 bg-zinc-900/95 shadow-2xl text-xs max-w-xs transition-transform"
+          className="absolute pointer-events-none z-30 p-3 rounded-xl glass-panel border border-zinc-200 dark:border-zinc-700 bg-white/95 dark:bg-zinc-900/95 shadow-2xl text-xs max-w-xs transition-transform"
           style={{
-            left: Math.min(tooltipPos.x + 15, 450),
-            top: Math.max(tooltipPos.y - 120, 15),
+            left: Math.min(Math.max(tooltipPos.x + 15, 12), (mountRef.current?.clientWidth || 600) - 270),
+            top: Math.min(Math.max(tooltipPos.y - 110, 12), (mountRef.current?.clientHeight || 440) - 130),
           }}
         >
           <div className="flex items-start gap-2.5">
             <img
               src={api.getSampleImageUrl(datasetId, hoveredPoint.sample_ref, password)}
               alt="Thumbnail"
-              className="w-12 h-12 rounded-lg object-cover bg-zinc-800 border border-zinc-700 shrink-0"
+              className="w-12 h-12 rounded-lg object-cover bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shrink-0"
               onError={e => {
                 (e.target as HTMLElement).style.display = 'none';
               }}
             />
             <div className="min-w-0">
-              <div className="font-mono text-zinc-200 truncate font-semibold">
+              <div className="font-mono text-zinc-900 dark:text-zinc-200 truncate font-semibold">
                 {hoveredPoint.sample_ref}
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-zinc-400">Class:</span>
-                <span className="font-medium text-white px-1.5 py-0.2 rounded bg-zinc-800">
+                <span className="text-zinc-500 dark:text-zinc-400">Class:</span>
+                <span className="font-medium text-zinc-900 dark:text-white px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800">
                   {hoveredPoint.ground_truth_class}
                 </span>
               </div>
-              <div className="text-[11px] text-zinc-400 mt-0.5">
-                Split: <span className="text-zinc-300 font-mono">{hoveredPoint.split}</span> | Cluster: #{hoveredPoint.cluster_id}
+              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Split: <span className="text-zinc-700 dark:text-zinc-300 font-mono">{hoveredPoint.split}</span> | Cluster: #{hoveredPoint.cluster_id}
               </div>
               {hoveredPoint.is_outlier && (
-                <div className="mt-1 px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-semibold border border-rose-500/30">
+                <div className="mt-1 px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-700 dark:text-rose-300 text-[10px] font-semibold border border-rose-500/30">
                   Isolation Forest Outlier (Score: {hoveredPoint.outlier_score})
                 </div>
               )}
@@ -394,7 +423,7 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
       )}
 
       {/* Interactive Legend & Hint */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-t border-zinc-800/80 bg-zinc-950/80 text-[11px]">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-t border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-950/80 text-[11px]">
         <div className="flex items-center gap-3 overflow-x-auto py-0.5">
           <span className="text-zinc-500 font-mono">Classes:</span>
           {uniqueClasses.map((cls, i) => (
@@ -403,12 +432,12 @@ export const ClusterExplorer3D: React.FC<ClusterExplorer3DProps> = ({
                 className="w-2.5 h-2.5 rounded-full"
                 style={{ backgroundColor: CLASS_PALETTE[i % CLASS_PALETTE.length] }}
               />
-              <span className="text-zinc-300">{cls}</span>
+              <span className="text-zinc-700 dark:text-zinc-300">{cls}</span>
             </div>
           ))}
           <div className="flex items-center gap-1.5 ml-2">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-            <span className="text-rose-400 font-medium">Outlier Halo</span>
+            <span className="text-rose-600 dark:text-rose-400 font-medium">Outlier Halo</span>
           </div>
         </div>
 

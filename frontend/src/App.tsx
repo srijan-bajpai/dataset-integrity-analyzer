@@ -48,7 +48,7 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
       {/* Top Header */}
       <Header />
 
@@ -60,16 +60,16 @@ const MainLayout: React.FC = () => {
         <main className="flex-1 flex flex-col overflow-y-auto bg-telemetry-grid">
           {/* Live Progress Banner for Active Audits */}
           {selectedRun && (selectedRun.status === 'running' || selectedRun.status === 'queued') && (
-            <div className="bg-indigo-950/80 border-b border-indigo-500/30 p-3 px-6 flex items-center justify-between text-xs text-indigo-200">
+            <div className="bg-indigo-500/10 dark:bg-indigo-950/80 border-b border-indigo-500/30 p-3 px-6 flex items-center justify-between text-xs text-indigo-700 dark:text-indigo-200">
               <div className="flex items-center gap-3">
-                <RotateCw className="w-4 h-4 text-indigo-400 animate-spin shrink-0" />
+                <RotateCw className="w-4 h-4 text-indigo-500 dark:text-indigo-400 animate-spin shrink-0" />
                 <span>
                   <strong>Run #{selectedRun.id.slice(0, 8)}:</strong> {selectedRun.status_message || 'Analyzing dataset integrity...'} ({selectedRun.progress_percent}%)
                 </span>
               </div>
               <button
                 onClick={handleCancelRun}
-                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 text-xs font-mono transition-colors"
+                className="px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-zinc-700 text-xs font-mono transition-colors"
               >
                 Cancel Audit
               </button>
@@ -77,7 +77,7 @@ const MainLayout: React.FC = () => {
           )}
 
           {/* Studio Tab Navigation Bar */}
-          <div className="border-b border-zinc-800/80 bg-zinc-950/70 backdrop-blur-md px-4 sm:px-6 pt-3">
+          <div className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md px-4 sm:px-6 pt-3">
             <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto pb-px">
               {tabs.map(tab => {
                 const isActive = activeTab === tab.key;
@@ -87,11 +87,11 @@ const MainLayout: React.FC = () => {
                     onClick={() => setActiveTab(tab.key)}
                     className={`flex items-center gap-2 px-3.5 py-2.5 rounded-t-xl text-xs font-medium whitespace-nowrap transition-all border-b-2 ${
                       isActive
-                        ? 'border-indigo-500 text-white bg-zinc-900/90 shadow-sm'
-                        : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
+                        ? 'border-indigo-500 text-zinc-900 dark:text-white bg-white/90 dark:bg-zinc-900/90 shadow-sm'
+                        : 'border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900/40'
                     }`}
                   >
-                    <span className={isActive ? 'text-indigo-400' : 'text-zinc-500'}>
+                    <span className={isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400 dark:text-zinc-500'}>
                       {tab.icon}
                     </span>
                     <span>{tab.label}</span>

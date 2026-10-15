@@ -36,12 +36,12 @@ export const StateView: React.FC<StateViewProps> = ({
     if (loadingSkeleton) return <div className={className}>{loadingSkeleton}</div>;
     return (
       <div className={cn('p-8 space-y-4 animate-pulse', className)}>
-        <div className="h-8 bg-zinc-800/60 rounded-xl w-1/3" />
-        <div className="h-32 bg-zinc-800/40 rounded-2xl w-full" />
+        <div className="h-8 bg-zinc-200 dark:bg-zinc-800/60 rounded-xl w-1/3" />
+        <div className="h-32 bg-zinc-200 dark:bg-zinc-800/40 rounded-2xl w-full" />
         <div className="grid grid-cols-3 gap-4">
-          <div className="h-24 bg-zinc-800/40 rounded-xl" />
-          <div className="h-24 bg-zinc-800/40 rounded-xl" />
-          <div className="h-24 bg-zinc-800/40 rounded-xl" />
+          <div className="h-24 bg-zinc-200 dark:bg-zinc-800/40 rounded-xl" />
+          <div className="h-24 bg-zinc-200 dark:bg-zinc-800/40 rounded-xl" />
+          <div className="h-24 bg-zinc-200 dark:bg-zinc-800/40 rounded-xl" />
         </div>
       </div>
     );
@@ -50,11 +50,11 @@ export const StateView: React.FC<StateViewProps> = ({
   if (state === 'error') {
     return (
       <div className={cn('p-12 text-center rounded-2xl border border-rose-500/20 bg-rose-500/5 glass-panel', className)}>
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 mb-4">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-500/20 text-rose-500 dark:text-rose-400 mb-4">
           <AlertCircle className="w-6 h-6" />
         </div>
-        <h3 className="text-lg font-semibold text-zinc-100">Unable to load telemetry</h3>
-        <p className="text-sm text-zinc-400 mt-1 max-w-md mx-auto">
+        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Unable to load telemetry</h3>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 max-w-md mx-auto">
           {errorMessage || 'A network error occurred while communicating with the audit service.'}
         </p>
         {onRetry && (
@@ -72,12 +72,12 @@ export const StateView: React.FC<StateViewProps> = ({
 
   if (state === 'empty') {
     return (
-      <div className={cn('p-12 text-center rounded-2xl border border-zinc-800 glass-panel', className)}>
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-zinc-800 text-zinc-400 mb-4">
+      <div className={cn('p-12 text-center rounded-2xl border border-zinc-200 dark:border-zinc-800 glass-panel', className)}>
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 mb-4">
           <FolderSearch className="w-6 h-6" />
         </div>
-        <h3 className="text-lg font-semibold text-zinc-100">{emptyTitle}</h3>
-        <p className="text-sm text-zinc-400 mt-1 max-w-md mx-auto">{emptyDescription}</p>
+        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{emptyTitle}</h3>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 max-w-md mx-auto">{emptyDescription}</p>
         {emptyAction && (
           <button
             onClick={emptyAction.onClick}

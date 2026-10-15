@@ -67,6 +67,18 @@ export const TriageTab: React.FC = () => {
 
   const duplicateGroups = report?.results?.duplicates?.duplicate_groups || [];
 
+  const getDuplicatePairForSample = (sampleRef: string) => {
+    const group = duplicateGroups.find(g => g.sample_refs?.includes(sampleRef));
+    if (group && group.sample_refs?.length >= 2) {
+      const otherRef = group.sample_refs.find(r => r !== sampleRef) || group.sample_refs[1];
+      return { original: sampleRef, duplicate: otherRef, group: group.group_id };
+    }
+    if (duplicateGroups.length > 0 && duplicateGroups[0].sample_refs?.length >= 2) {
+      return { original: duplicateGroups[0].sample_refs[0], duplicate: duplicateGroups[0].sample_refs[1], group: duplicateGroups[0].group_id };
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner & Export Hub */}
@@ -74,12 +86,12 @@ export const TriageTab: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <FileSearch className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-base font-bold text-white font-sans">
+              <FileSearch className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+              <h2 className="text-base font-bold text-zinc-900 dark:text-white font-sans">
                 Sample Triage & 1-Click Export Center
               </h2>
             </div>
-            <p className="text-xs text-zinc-400 mt-1">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
               {isSimple
                 ? 'Review photos flagged by DIA, compare duplicate pairs side-by-side, and download compliance reports.'
                 : 'Per-sample diagnostic telemetry, out-of-fold label disagreements, pHash Hamming clusters, and machine-actionable export manifests.'}
@@ -105,10 +117,10 @@ export const TriageTab: React.FC = () => {
                 const url = api.getExportUrl(selectedRun.id, 'datasheet_md', password);
                 window.open(url, '_blank');
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700/80 text-xs font-medium transition-colors"
               title="Download Gebru et al. Datasheet in Markdown"
             >
-              <FileText className="w-3.5 h-3.5 text-zinc-400" />
+              <FileText className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
               <span>Datasheet (MD)</span>
             </button>
 
@@ -117,10 +129,10 @@ export const TriageTab: React.FC = () => {
                 const url = api.getExportUrl(selectedRun.id, 'manifest_csv', password);
                 window.open(url, '_blank');
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700/80 text-xs font-medium transition-colors"
               title="Download Remediation Action Manifest CSV"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Remediation CSV</span>
             </button>
 
@@ -129,10 +141,10 @@ export const TriageTab: React.FC = () => {
                 const url = api.getExportUrl(selectedRun.id, 'samples_csv', password);
                 window.open(url, '_blank');
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700/80 text-xs font-medium transition-colors"
               title="Download raw per-sample metric values CSV"
             >
-              <Download className="w-3.5 h-3.5 text-zinc-400" />
+              <Download className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
               <span>All Samples CSV</span>
             </button>
           </div>
@@ -141,11 +153,13 @@ export const TriageTab: React.FC = () => {
 
       {/* Filter Navigation Pills */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1.5 bg-zinc-900/60 p-1 rounded-xl border border-zinc-800/80 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 bg-zinc-100 dark:bg-zinc-900/60 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800/80 text-xs">
           <button
             onClick={() => setFilter('all')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              filter === 'all' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
+              filter === 'all'
+                ? 'bg-indigo-600 text-white'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
             All Flagged ({samples.length})
@@ -153,7 +167,7 @@ export const TriageTab: React.FC = () => {
           <button
             onClick={() => setFilter('leakage')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
-              filter === 'leakage' ? 'bg-rose-500/20 text-rose-300 font-semibold' : 'text-zinc-400 hover:text-rose-400'
+              filter === 'leakage' ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 font-semibold' : 'text-zinc-600 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400'
             }`}
           >
             <Split className="w-3.5 h-3.5" />
@@ -162,7 +176,7 @@ export const TriageTab: React.FC = () => {
           <button
             onClick={() => setFilter('labels')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
-              filter === 'labels' ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'text-zinc-400 hover:text-amber-400'
+              filter === 'labels' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 font-semibold' : 'text-zinc-600 dark:text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400'
             }`}
           >
             <Tag className="w-3.5 h-3.5" />
@@ -171,7 +185,7 @@ export const TriageTab: React.FC = () => {
           <button
             onClick={() => setFilter('quality')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
-              filter === 'quality' ? 'bg-sky-500/20 text-sky-300 font-semibold' : 'text-zinc-400 hover:text-sky-400'
+              filter === 'quality' ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 font-semibold' : 'text-zinc-600 dark:text-zinc-400 hover:text-sky-600 dark:hover:text-sky-400'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -180,7 +194,7 @@ export const TriageTab: React.FC = () => {
           <button
             onClick={() => setFilter('outliers')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
-              filter === 'outliers' ? 'bg-purple-500/20 text-purple-300 font-semibold' : 'text-zinc-400 hover:text-purple-400'
+              filter === 'outliers' ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 font-semibold' : 'text-zinc-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400'
             }`}
           >
             <Eye className="w-3.5 h-3.5" />
@@ -197,7 +211,7 @@ export const TriageTab: React.FC = () => {
                 setDiffPair({ original: g.sample_refs[0], duplicate: g.sample_refs[1], group: g.group_id });
               }
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-mono transition-colors"
           >
             <Copy className="w-3.5 h-3.5" />
             <span>Compare Duplicate Pair (#{duplicateGroups[0]?.group_id || 1})</span>
@@ -224,10 +238,10 @@ export const TriageTab: React.FC = () => {
               <div
                 key={sample.sample_ref}
                 onClick={() => setSelectedSample(sample)}
-                className="group relative rounded-xl overflow-hidden glass-card border border-zinc-800 hover:border-zinc-600 cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg flex flex-col"
+                className="group relative rounded-xl overflow-hidden glass-card border border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-lg flex flex-col"
               >
                 {/* Thumbnail */}
-                <div className="relative aspect-square w-full bg-zinc-900 overflow-hidden">
+                <div className="relative aspect-square w-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
                   {selectedDataset ? (
                     <img
                       src={api.getSampleImageUrl(selectedDataset.id, sample.sample_ref, password)}
@@ -263,16 +277,32 @@ export const TriageTab: React.FC = () => {
                       </span>
                     )}
                   </div>
+
+                  {/* Direct Duplicate Comparator Quick Button on Thumbnail */}
+                  {isDuplicate && (
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        const pair = getDuplicatePairForSample(sample.sample_ref);
+                        if (pair) setDiffPair(pair);
+                      }}
+                      className="absolute top-1.5 right-1.5 p-1 rounded-md bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold shadow-md z-10 transition-transform hover:scale-110 active:scale-95"
+                      title="Compare duplicate pair side-by-side"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Footer Info */}
-                <div className="p-2 text-left bg-zinc-950/80 border-t border-zinc-800/80">
-                  <div className="text-[11px] font-mono text-zinc-200 truncate font-semibold">
+                <div className="p-2 text-left bg-zinc-50 dark:bg-zinc-950/80 border-t border-zinc-200 dark:border-zinc-800/80">
+                  <div className="text-[11px] font-mono text-zinc-800 dark:text-zinc-200 truncate font-semibold">
                     {sample.sample_ref}
                   </div>
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 mt-0.5">
+                  <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
                     <span className="truncate">{sample.ground_truth_class || 'unlabelled'}</span>
-                    <span className="font-mono text-zinc-500 uppercase">{sample.split}</span>
+                    <span className="font-mono text-zinc-400 dark:text-zinc-500 uppercase">{sample.split}</span>
                   </div>
                 </div>
               </div>
@@ -284,21 +314,21 @@ export const TriageTab: React.FC = () => {
       {/* Side-by-Side Duplicate / Leakage Comparator Modal */}
       {diffPair && selectedDataset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="relative w-full max-w-2xl rounded-2xl glass-panel border border-zinc-700 bg-zinc-900 shadow-2xl p-6 text-zinc-100">
+          <div className="relative w-full max-w-2xl rounded-2xl glass-panel border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-2xl p-6 text-zinc-900 dark:text-zinc-100">
             <button
               onClick={() => setDiffPair(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-2 mb-4">
-              <Copy className="w-5 h-5 text-amber-400" />
+              <Copy className="w-5 h-5 text-amber-500 dark:text-amber-400" />
               <div>
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
                   Side-by-Side Duplicate & Leakage Comparator (Group #{diffPair.group})
                 </h3>
-                <span className="text-xs text-zinc-400 font-mono">
+                <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
                   Perceptual Hash Similarity (pHash distance &lt;= 6)
                 </span>
               </div>
@@ -306,31 +336,31 @@ export const TriageTab: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4">
               {/* Image A */}
-              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 text-center">
-                <span className="text-xs font-mono font-bold text-zinc-300 block mb-2 truncate">
+              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800 text-center">
+                <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300 block mb-2 truncate">
                   Image A: {diffPair.original}
                 </span>
                 <img
                   src={api.getSampleImageUrl(selectedDataset.id, diffPair.original, password)}
                   alt="Original"
-                  className="w-full h-48 object-contain rounded-lg bg-black/40 border border-zinc-800"
+                  className="w-full h-48 object-contain rounded-lg bg-zinc-200 dark:bg-black/40 border border-zinc-200 dark:border-zinc-800"
                 />
               </div>
 
               {/* Image B */}
-              <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 text-center">
-                <span className="text-xs font-mono font-bold text-zinc-300 block mb-2 truncate">
+              <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800 text-center">
+                <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300 block mb-2 truncate">
                   Image B: {diffPair.duplicate}
                 </span>
                 <img
                   src={api.getSampleImageUrl(selectedDataset.id, diffPair.duplicate, password)}
                   alt="Duplicate"
-                  className="w-full h-48 object-contain rounded-lg bg-black/40 border border-zinc-800"
+                  className="w-full h-48 object-contain rounded-lg bg-zinc-200 dark:bg-black/40 border border-zinc-200 dark:border-zinc-800"
                 />
               </div>
             </div>
 
-            <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+            <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
               <strong>Recommendation:</strong> Prune Image B from the training set or isolate it from the validation/test splits to eliminate evaluation leakage.
             </div>
           </div>
@@ -340,10 +370,10 @@ export const TriageTab: React.FC = () => {
       {/* Flagged Sample Detail Drawer Modal */}
       {selectedSample && selectedDataset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="relative w-full max-w-lg rounded-2xl glass-panel border border-zinc-700 bg-zinc-900 shadow-2xl p-6 text-zinc-100">
+          <div className="relative w-full max-w-lg rounded-2xl glass-panel border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-2xl p-6 text-zinc-900 dark:text-zinc-100">
             <button
               onClick={() => setSelectedSample(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -352,42 +382,59 @@ export const TriageTab: React.FC = () => {
               <img
                 src={api.getSampleImageUrl(selectedDataset.id, selectedSample.sample_ref, password)}
                 alt={selectedSample.sample_ref}
-                className="w-28 h-28 object-cover rounded-xl bg-zinc-950 border border-zinc-700 shrink-0"
+                className="w-28 h-28 object-cover rounded-xl bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 shrink-0"
               />
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-white font-mono truncate">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-mono truncate">
                   {selectedSample.sample_ref}
                 </h3>
-                <div className="text-xs text-zinc-400 mt-1">
-                  Class: <strong className="text-zinc-200">{selectedSample.ground_truth_class}</strong>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Class: <strong className="text-zinc-800 dark:text-zinc-200">{selectedSample.ground_truth_class}</strong>
                 </div>
-                <div className="text-xs text-zinc-400">
-                  Split: <strong className="text-zinc-200 uppercase">{selectedSample.split}</strong>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Split: <strong className="text-zinc-800 dark:text-zinc-200 uppercase">{selectedSample.split}</strong>
                 </div>
 
                 <div className="flex flex-wrap gap-1 mt-2">
                   {selectedSample.flags.map(f => (
                     <span
                       key={f}
-                      className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px] border border-zinc-700"
+                      className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] border border-zinc-200 dark:border-zinc-700"
                     >
                       {f}
                     </span>
                   ))}
                 </div>
+
+                {/* Duplicate comparison trigger in drawer */}
+                {selectedSample.flags.some(f => f.includes('duplicate')) && (
+                  <button
+                    onClick={() => {
+                      const pair = getDuplicatePairForSample(selectedSample.sample_ref);
+                      if (pair) {
+                        setSelectedSample(null);
+                        setDiffPair(pair);
+                      }
+                    }}
+                    className="mt-3 w-full py-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Compare with Duplicate Image</span>
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Metrics Breakdown */}
-            <div className="mt-4 pt-3 border-t border-zinc-800">
-              <span className="text-xs font-mono font-semibold uppercase text-zinc-400 block mb-2">
+            <div className="mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+              <span className="text-xs font-mono font-semibold uppercase text-zinc-500 dark:text-zinc-400 block mb-2">
                 Sample Telemetry
               </span>
               <div className="max-h-40 overflow-y-auto space-y-1 font-mono text-xs">
                 {Object.entries(selectedSample.metrics).map(([k, v]) => (
-                  <div key={k} className="flex justify-between py-1 px-2 rounded bg-zinc-950/60 text-zinc-400">
+                  <div key={k} className="flex justify-between py-1 px-2 rounded bg-zinc-100 dark:bg-zinc-950/60 text-zinc-600 dark:text-zinc-400">
                     <span>{k}</span>
-                    <span className="text-zinc-200">{String(v)}</span>
+                    <span className="text-zinc-800 dark:text-zinc-200">{String(v)}</span>
                   </div>
                 ))}
               </div>

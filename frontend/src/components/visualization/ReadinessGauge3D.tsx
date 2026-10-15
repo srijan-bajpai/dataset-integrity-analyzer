@@ -65,7 +65,7 @@ export const ReadinessGauge3D: React.FC<ReadinessGauge3DProps> = ({
             strokeWidth={strokeWidth}
             strokeDasharray={`${arcLength} ${circumference}`}
             strokeLinecap="round"
-            className="text-zinc-800/80 dark:text-zinc-800/60"
+            className="text-zinc-200 dark:text-zinc-800/60"
           />
 
           {/* Value Progress Stroke */}
@@ -90,16 +90,16 @@ export const ReadinessGauge3D: React.FC<ReadinessGauge3DProps> = ({
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
           <div className="flex items-center gap-1.5 mb-0.5">
             {getIcon()}
-            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-zinc-400">
+            <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Readiness
             </span>
           </div>
 
           <div className="flex items-baseline justify-center gap-1">
-            <span className="text-5xl font-black font-sans tracking-tight text-white drop-shadow-md">
+            <span className="text-5xl font-black font-sans tracking-tight text-zinc-900 dark:text-white drop-shadow-md">
               {Math.round(score)}
             </span>
-            <span className="text-zinc-500 font-mono text-sm">/ 100</span>
+            <span className="text-zinc-400 dark:text-zinc-500 font-mono text-sm">/ 100</span>
           </div>
 
           <div

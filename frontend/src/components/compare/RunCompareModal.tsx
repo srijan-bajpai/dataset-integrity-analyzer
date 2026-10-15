@@ -58,23 +58,23 @@ export const RunCompareModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="relative w-full max-w-3xl rounded-2xl glass-panel border border-zinc-700 bg-zinc-900 shadow-2xl p-6 text-zinc-100 max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-3xl rounded-2xl glass-panel border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-2xl p-6 text-zinc-900 dark:text-zinc-100 max-h-[90vh] overflow-y-auto">
         <button
           onClick={() => setIsCompareOpen(false)}
-          className="absolute top-4 right-4 p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+          className="absolute top-4 right-4 p-1.5 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="flex items-center gap-2.5 mb-5">
-          <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+          <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-500 dark:text-indigo-400">
             <GitCompare className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white">
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">
               Diff Two Audits (Before vs. After Scorecard)
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
               {isSimple
                 ? 'Compare two audit runs to prove how much your dataset improved after cleaning.'
                 : 'Differential integrity telemetry evaluating dataset drift, score deltas, and sample redistributions.'}
@@ -83,15 +83,15 @@ export const RunCompareModal: React.FC = () => {
         </div>
 
         {/* Pair Selector Controls */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-zinc-950/70 border border-zinc-800 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-zinc-100/70 dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800 mb-6">
           <div>
-            <label className="block text-xs font-mono font-medium text-zinc-400 mb-1">
+            <label className="block text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400 mb-1">
               Run A (Baseline / Before)
             </label>
             <select
               value={runAId}
               onChange={e => setRunAId(e.target.value)}
-              className="w-full py-2 px-3 rounded-xl bg-zinc-900 border border-zinc-700 text-xs font-mono text-zinc-200 focus:outline-none focus:border-indigo-500"
+              className="w-full py-2 px-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-mono text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-indigo-500"
             >
               {completedRuns.map(r => (
                 <option key={r.id} value={r.id}>
@@ -102,13 +102,13 @@ export const RunCompareModal: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-mono font-medium text-zinc-400 mb-1">
+            <label className="block text-xs font-mono font-medium text-zinc-600 dark:text-zinc-400 mb-1">
               Run B (Current / After Fixes)
             </label>
             <select
               value={runBId}
               onChange={e => setRunBId(e.target.value)}
-              className="w-full py-2 px-3 rounded-xl bg-zinc-900 border border-zinc-700 text-xs font-mono text-zinc-200 focus:outline-none focus:border-indigo-500"
+              className="w-full py-2 px-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-xs font-mono text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-indigo-500"
             >
               {completedRuns.map(r => (
                 <option key={r.id} value={r.id}>
@@ -121,25 +121,25 @@ export const RunCompareModal: React.FC = () => {
 
         {/* Results */}
         {loading ? (
-          <div className="py-12 text-center text-xs text-zinc-400 flex flex-col items-center gap-2">
-            <RotateCw className="w-6 h-6 animate-spin text-indigo-400" />
+          <div className="py-12 text-center text-xs text-zinc-500 dark:text-zinc-400 flex flex-col items-center gap-2">
+            <RotateCw className="w-6 h-6 animate-spin text-indigo-500 dark:text-indigo-400" />
             <span>Calculating differential telemetry...</span>
           </div>
         ) : error ? (
-          <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300">
+          <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-700 dark:text-rose-300">
             {error}
           </div>
         ) : comparison ? (
           <div className="space-y-5">
             {/* Score Delta Hero Banner */}
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-800 text-center">
-              <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block mb-1">
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-950 dark:to-zinc-900 border border-zinc-200 dark:border-zinc-800 text-center">
+              <span className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 uppercase tracking-wider block mb-1">
                 AI Readiness Score Improvement
               </span>
               <div className="flex items-center justify-center gap-3">
                 <span
                   className={`text-4xl font-black font-sans ${
-                    delta !== null && delta !== undefined && delta >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    delta !== null && delta !== undefined && delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                   }`}
                 >
                   {delta !== null && delta !== undefined
@@ -147,10 +147,10 @@ export const RunCompareModal: React.FC = () => {
                     : 'No delta'}
                 </span>
                 {delta !== null && delta !== undefined && delta > 0 && (
-                  <TrendingUp className="w-8 h-8 text-emerald-400" />
+                  <TrendingUp className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
                 )}
               </div>
-              <p className="text-xs text-zinc-400 mt-2 max-w-md mx-auto">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-2 max-w-md mx-auto">
                 {isSimple
                   ? (delta && delta > 0
                       ? `Great job! Your fixes boosted overall dataset health by +${delta.toFixed(1)} points.`
@@ -160,13 +160,13 @@ export const RunCompareModal: React.FC = () => {
             </div>
 
             {/* Same Fingerprint Badge */}
-            <div className="flex items-center justify-between text-xs font-mono p-3 rounded-xl bg-zinc-900/60 border border-zinc-800">
-              <span className="text-zinc-400">Dataset SHA-256 Fingerprint:</span>
+            <div className="flex items-center justify-between text-xs font-mono p-3 rounded-xl bg-zinc-100 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800">
+              <span className="text-zinc-600 dark:text-zinc-400">Dataset SHA-256 Fingerprint:</span>
               <span
                 className={`px-2 py-0.5 rounded font-semibold ${
                   comparison.same_dataset_fingerprint
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
                 }`}
               >
                 {comparison.same_dataset_fingerprint ? 'Identical Dataset Files' : 'Updated / Cleaned Files'}
@@ -176,17 +176,17 @@ export const RunCompareModal: React.FC = () => {
             {/* Class Deltas Breakdown */}
             {Object.keys(comparison.class_count_deltas_b_minus_a).length > 0 && (
               <div>
-                <h4 className="text-xs font-mono font-semibold uppercase text-zinc-400 mb-2">
+                <h4 className="text-xs font-mono font-semibold uppercase text-zinc-600 dark:text-zinc-400 mb-2">
                   Sample Count Changes by Class (B - A)
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
                   {Object.entries(comparison.class_count_deltas_b_minus_a).map(([cls, diff]) => (
                     <div
                       key={cls}
-                      className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800 flex justify-between"
+                      className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 flex justify-between"
                     >
-                      <span className="text-zinc-300 truncate">{cls}:</span>
-                      <span className={`font-bold ${diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-amber-400' : 'text-zinc-500'}`}>
+                      <span className="text-zinc-800 dark:text-zinc-300 truncate">{cls}:</span>
+                      <span className={`font-bold ${diff > 0 ? 'text-emerald-600 dark:text-emerald-400' : diff < 0 ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-400 dark:text-zinc-500'}`}>
                         {diff > 0 ? `+${diff}` : diff}
                       </span>
                     </div>

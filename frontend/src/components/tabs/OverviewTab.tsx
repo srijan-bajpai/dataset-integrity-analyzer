@@ -12,6 +12,7 @@ import {
   Sliders,
   Sparkles,
   Zap,
+  CheckCircle2,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 
@@ -69,36 +70,76 @@ export const OverviewTab: React.FC = () => {
   const hardGates = readiness?.hard_gates_tripped || [];
   const biasImpact = report?.results?.bias_impact;
 
-  // Derive Top 3 "Do These First" Fixes
-  const topFixes = [
-    {
-      title: 'Remove Cross-Split Duplicate Leaks',
-      dimension: 'Duplicates & Leakage',
-      scoreGain: 11.2,
-      count: report?.results?.duplicates?.cross_split_duplicate_groups || 0,
-      description: 'Identical images found across Train and Test splits. Evaluation will be falsely optimistic.',
-      simple: 'Photos in your training folder also exist in your testing folder. The AI will memorize them instead of actually learning!',
-      code: 'REMOVE_DUPLICATE',
-    },
-    {
-      title: 'Fix Suspected Mislabeled Images',
-      dimension: 'Label Integrity',
-      scoreGain: 6.5,
-      count: report?.results?.labels?.suspected_mislabel_count || (report?.sample_findings?.filter(s => s.flags?.includes('flag_suspected_mislabel'))?.length || 0),
-      description: 'Images where human labels conflict with confident model features.',
-      simple: 'Photos that were tagged with the wrong label by mistake (like a dog tagged as a cat).',
-      code: 'RELABEL_SAMPLE',
-    },
-    {
-      title: 'Prune Redundant Near-Duplicates',
-      dimension: 'Visual Diversity',
-      scoreGain: 4.1,
-      count: report?.results?.duplicates?.near_duplicate_count || 0,
-      description: 'Clusters of near-identical photos causing data bloating.',
-      simple: 'Repeated photos taken milliseconds apart that waste model training time without adding new knowledge.',
-      code: 'PRUNE_DUPLICATE',
-    },
-  ];
+  // Derive Top 3 "Do These First" Fixes dynamically from RecommendationEngine or non-zero defects
+  const backendRecs = report?.results?.recommendations;
+  const topFixes = React.useMemo(() => {
+    if (backendRecs && backendRecs.length > 0) {
+      return backendRecs.slice(0, 3).map((rec) => ({
+        title: rec.action || rec.defect,
+        dimension: rec.category,
+        scoreGain: rec.projected_score_gain,
+        count: rec.affected_sample_count,
+        description: rec.rationale || rec.defect,
+        simple: rec.defect,
+        code: rec.action_type,
+      }));
+    }
+
+    const fallbacks = [];
+    const crossSplitCount = report?.results?.duplicates?.cross_split_duplicate_groups || 0;
+    if (crossSplitCount > 0) {
+      fallbacks.push({
+        title: 'Remove Cross-Split Duplicate Leaks',
+        dimension: 'Duplicates & Leakage',
+        scoreGain: 11.2,
+        count: crossSplitCount,
+        description: 'Identical images found across Train and Test splits. Evaluation will be falsely optimistic.',
+        simple: 'Photos in your training folder also exist in your testing folder. The AI will memorize them instead of actually learning!',
+        code: 'REMOVE_DUPLICATE',
+      });
+    }
+
+    const mislabelCount = report?.results?.labels?.suspected_mislabel_count || (report?.sample_findings?.filter(s => s.flags?.includes('flag_suspected_mislabel'))?.length || 0);
+    if (mislabelCount > 0) {
+      fallbacks.push({
+        title: 'Fix Suspected Mislabeled Images',
+        dimension: 'Label Integrity',
+        scoreGain: 6.5,
+        count: mislabelCount,
+        description: 'Images where human labels conflict with confident model features.',
+        simple: 'Photos that were tagged with the wrong label by mistake (like a dog tagged as a cat).',
+        code: 'RELABEL_SAMPLE',
+      });
+    }
+
+    const defectRate = report?.results?.quality?.defect_rate_pct || 0;
+    if (defectRate > 0) {
+      fallbacks.push({
+        title: 'Fix Degraded Blur / Lighting Images',
+        dimension: 'Image Quality',
+        scoreGain: 5.0,
+        count: Math.round(((report?.sample_count || 100) * defectRate) / 100),
+        description: 'Photos with severe Laplacian blur or luminance clipping.',
+        simple: 'Photos that are too dark or blurry for AI feature extraction.',
+        code: 'INSPECT_DEFECT',
+      });
+    }
+
+    const nearDupCount = report?.results?.duplicates?.near_duplicate_count || 0;
+    if (nearDupCount > 0) {
+      fallbacks.push({
+        title: 'Prune Redundant Near-Duplicates',
+        dimension: 'Visual Diversity',
+        scoreGain: 4.1,
+        count: nearDupCount,
+        description: 'Clusters of near-identical photos causing data bloating.',
+        simple: 'Repeated photos taken milliseconds apart that waste model training time without adding new knowledge.',
+        code: 'PRUNE_DUPLICATE',
+      });
+    }
+
+    return fallbacks.slice(0, 3);
+  }, [backendRecs, report]);
 
   return (
     <StateView
@@ -156,11 +197,11 @@ export const OverviewTab: React.FC = () => {
             glow={getReadinessTier(overallScore) === 'ready' ? 'emerald' : getReadinessTier(overallScore) === 'warning' ? 'amber' : 'rose'}
             className="lg:col-span-5 flex flex-col items-center justify-center p-6 text-center"
           >
-            <div className="w-full flex items-center justify-between text-xs text-zinc-400 mb-2">
-              <span className="font-mono uppercase tracking-wider text-[11px] font-semibold text-zinc-300">
+            <div className="w-full flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-2">
+              <span className="font-mono uppercase tracking-wider text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
                 Executive Health Score
               </span>
-              <span className="font-mono text-zinc-500">DIA-v2.0</span>
+              <span className="font-mono text-zinc-400 dark:text-zinc-500">DIA-v2.0</span>
             </div>
 
             <ReadinessGauge3D
@@ -170,12 +211,12 @@ export const OverviewTab: React.FC = () => {
               size={230}
             />
 
-            <div className="w-full mt-4 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 text-left text-xs">
-              <div className="text-zinc-300 font-medium flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <div className="w-full mt-4 p-3 rounded-xl bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-left text-xs">
+              <div className="text-zinc-800 dark:text-zinc-300 font-medium flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                 <span>Executive Verdict:</span>
               </div>
-              <p className="text-zinc-400 mt-1 leading-relaxed">
+              <p className="text-zinc-600 dark:text-zinc-400 mt-1 leading-relaxed">
                 {isSimple
                   ? (overallScore >= 80
                       ? 'Your dataset is in top shape! It has good balance, sharp images, and clean labels ready for training.'
@@ -193,14 +234,14 @@ export const OverviewTab: React.FC = () => {
             <GlassCard tilt={true} elevation="md" glow="indigo" className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-500 dark:text-indigo-400">
                     <TrendingDown className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white font-sans">
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-white font-sans">
                       Predicted Model Accuracy Impact (C2)
                     </h3>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
                       {isSimple
                         ? 'Estimated accuracy loss if you train a model on this uncleaned dataset'
                         : 'Synthetic degradation empirical model with 95% confidence bounds'}
@@ -210,7 +251,7 @@ export const OverviewTab: React.FC = () => {
 
                 <button
                   onClick={() => setActiveTab('whatif')}
-                  className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-medium font-mono"
+                  className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 font-medium font-mono"
                 >
                   <Sliders className="w-3.5 h-3.5" />
                   <span>Simulate Fixes</span>
@@ -218,11 +259,11 @@ export const OverviewTab: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-4 mt-4">
-                <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-zinc-800">
-                  <span className="text-[11px] font-mono text-zinc-400 uppercase">
+                <div className="p-3.5 rounded-xl bg-zinc-100 dark:bg-zinc-900/70 border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 uppercase">
                     Test Accuracy Loss
                   </span>
-                  <div className="text-2xl font-black text-rose-400 mt-1 font-mono">
+                  <div className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1 font-mono">
                     {biasImpact?.estimated_accuracy_loss_pct !== undefined
                       ? `-${biasImpact.estimated_accuracy_loss_pct.toFixed(1)}%`
                       : '-5.8%'}
@@ -232,11 +273,11 @@ export const OverviewTab: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-zinc-800">
-                  <span className="text-[11px] font-mono text-zinc-400 uppercase">
+                <div className="p-3.5 rounded-xl bg-zinc-100 dark:bg-zinc-900/70 border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 uppercase">
                     Potential Recovery
                   </span>
-                  <div className="text-2xl font-black text-emerald-400 mt-1 font-mono">
+                  <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono">
                     {biasImpact?.projected_recovered_accuracy_pct !== undefined
                       ? `+${biasImpact.projected_recovered_accuracy_pct.toFixed(1)}%`
                       : '+5.4%'}
@@ -252,10 +293,10 @@ export const OverviewTab: React.FC = () => {
             <GlassCard tilt={true} elevation="md" className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <h3 className="text-sm font-bold text-white">
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
                     Top 3 "Do These First" Fixes
                   </h3>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
                     Ranked by projected AI readiness score gain vs. cleaning effort
                   </p>
                 </div>
@@ -264,54 +305,64 @@ export const OverviewTab: React.FC = () => {
                     const url = api.getExportUrl(selectedRun.id, 'manifest_csv', password);
                     window.open(url, '_blank');
                   }}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-mono transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 text-xs font-mono transition-colors"
                 >
-                  <Download className="w-3.5 h-3.5 text-zinc-400" />
+                  <Download className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                   <span>Export CSV</span>
                 </button>
               </div>
 
               <div className="space-y-2.5">
-                {topFixes.map((fix, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition-colors flex items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-400 font-mono text-xs font-bold shrink-0">
-                        {idx + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-white truncate">
-                            {fix.title}
-                          </span>
-                          {fix.count > 0 && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 font-mono">
-                              {fix.count} items
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-zinc-400 truncate mt-0.5">
-                          {isSimple ? fix.simple : fix.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
-                        +{fix.scoreGain} pt
-                      </span>
-                      <button
-                        onClick={() => setActiveTab('triage')}
-                        className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors"
-                        title="Inspect in Triage tab"
-                      >
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                {topFixes.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <div>
+                      <span className="font-semibold block text-emerald-800 dark:text-emerald-200">No Critical Remediation Required</span>
+                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400">All diagnostic dimensions meet production quality thresholds.</span>
                     </div>
                   </div>
-                ))}
+                ) : (
+                  topFixes.map((fix, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono text-xs font-bold shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-zinc-900 dark:text-white truncate">
+                              {fix.title}
+                            </span>
+                            {fix.count > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono">
+                                {fix.count} items
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate mt-0.5">
+                            {isSimple ? fix.simple : fix.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                          +{typeof fix.scoreGain === 'number' ? fix.scoreGain.toFixed(1) : fix.scoreGain} pt
+                        </span>
+                        <button
+                          onClick={() => setActiveTab('triage')}
+                          className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                          title="Inspect in Triage tab"
+                        >
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </GlassCard>
           </div>

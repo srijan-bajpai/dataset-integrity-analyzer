@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../lib/store';
 import { GlassCard } from '../common/GlassCard';
 import { StateView } from '../common/StateView';
@@ -17,42 +17,51 @@ export const WhatIfTab: React.FC = () => {
   const { report, selectedRun, password, audienceMode } = useApp();
   const isSimple = audienceMode === 'simple';
 
-  const baselineScore = report?.results?.readiness?.overall_score || 64;
+  const baselineScore = report?.results?.readiness?.overall_score || 0;
 
-  // Initial metric values from report
-  const initialMetrics = {
-    defect_rate_pct: report?.results?.quality?.defect_rate_pct ?? 8.0,
-    cross_split_duplicate_groups: report?.results?.duplicates?.cross_split_duplicate_groups ?? 2,
-    redundancy_ratio: report?.results?.duplicates?.redundancy_ratio ?? 0.12,
-    label_noise_rate_pct: report?.results?.labels?.label_noise_rate_pct ?? 4.5,
-    imbalance_ratio: report?.results?.distribution?.imbalance_ratio ?? 2.8,
-    cluster_entropy: report?.results?.diversity?.cluster_entropy ?? 0.72,
-  };
+  const hasDefect = report?.results?.quality?.defect_rate_pct != null;
+  const hasCrossSplit = report?.results?.duplicates?.cross_split_duplicate_groups != null;
+  const hasRedundancy = report?.results?.duplicates?.redundancy_ratio != null;
+  const hasLabelNoise = report?.results?.labels?.label_noise_rate_pct != null;
+  const hasImbalance = report?.results?.distribution?.imbalance_ratio != null;
+  const hasEntropy = report?.results?.diversity?.cluster_entropy != null;
 
-  const [sliderValues, setSliderValues] = useState<Record<string, number>>(initialMetrics);
+  const getBaselineMetrics = useCallback(() => ({
+    defect_rate_pct: report?.results?.quality?.defect_rate_pct ?? 0,
+    cross_split_duplicate_groups: report?.results?.duplicates?.cross_split_duplicate_groups ?? 0,
+    redundancy_ratio: report?.results?.duplicates?.redundancy_ratio ?? 0,
+    label_noise_rate_pct: report?.results?.labels?.label_noise_rate_pct ?? 0,
+    imbalance_ratio: report?.results?.distribution?.imbalance_ratio ?? 1.0,
+    cluster_entropy: report?.results?.diversity?.cluster_entropy ?? 0.8,
+  }), [report]);
+
+  const [sliderValues, setSliderValues] = useState<Record<string, number>>(getBaselineMetrics);
   const [whatIfResult, setWhatIfResult] = useState<WhatIfResponse | null>(null);
 
   // Sync when report loads
   useEffect(() => {
     if (report) {
-      setSliderValues({
-        defect_rate_pct: report?.results?.quality?.defect_rate_pct ?? 8.0,
-        cross_split_duplicate_groups: report?.results?.duplicates?.cross_split_duplicate_groups ?? 2,
-        redundancy_ratio: report?.results?.duplicates?.redundancy_ratio ?? 0.12,
-        label_noise_rate_pct: report?.results?.labels?.label_noise_rate_pct ?? 4.5,
-        imbalance_ratio: report?.results?.distribution?.imbalance_ratio ?? 2.8,
-        cluster_entropy: report?.results?.diversity?.cluster_entropy ?? 0.72,
-      });
+      setSliderValues(getBaselineMetrics());
     }
-  }, [report]);
+  }, [report, getBaselineMetrics]);
 
-  // Debounced API call to /what-if
+  // Debounced API call to /what-if (filtering to only evaluated metrics to prevent 422)
   useEffect(() => {
-    if (!selectedRun || selectedRun.status !== 'completed') return;
+    if (!selectedRun || selectedRun.status !== 'completed' || !report) return;
+
+    const changesToSend: Record<string, number> = {};
+    if (hasDefect) changesToSend.defect_rate_pct = Number(sliderValues.defect_rate_pct ?? 0);
+    if (hasCrossSplit) changesToSend.cross_split_duplicate_groups = Math.round(Number(sliderValues.cross_split_duplicate_groups ?? 0));
+    if (hasRedundancy) changesToSend.redundancy_ratio = Number(sliderValues.redundancy_ratio ?? 0);
+    if (hasLabelNoise) changesToSend.label_noise_rate_pct = Number(sliderValues.label_noise_rate_pct ?? 0);
+    if (hasImbalance) changesToSend.imbalance_ratio = Number(sliderValues.imbalance_ratio ?? 1.0);
+    if (hasEntropy) changesToSend.cluster_entropy = Number(sliderValues.cluster_entropy ?? 0.8);
+
+    if (Object.keys(changesToSend).length === 0) return;
 
     const timer = setTimeout(async () => {
       try {
-        const res = await api.getWhatIf(selectedRun.id, sliderValues, password);
+        const res = await api.getWhatIf(selectedRun.id, changesToSend, password);
         setWhatIfResult(res);
       } catch (err: unknown) {
         console.warn('What-If simulation error:', err);
@@ -60,7 +69,7 @@ export const WhatIfTab: React.FC = () => {
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [sliderValues, selectedRun, password]);
+  }, [sliderValues, selectedRun, report, password, hasDefect, hasCrossSplit, hasRedundancy, hasLabelNoise, hasImbalance, hasEntropy]);
 
   const handleSliderChange = (key: string, value: number) => {
     setSliderValues(prev => ({ ...prev, [key]: value }));
@@ -68,30 +77,26 @@ export const WhatIfTab: React.FC = () => {
 
   // 1-Click Fix Presets
   const applyPreset = (preset: 'zero_leakage' | 'fix_quality' | 'clean_labels' | 'perfect' | 'reset') => {
-    switch (preset) {
-      case 'zero_leakage':
-        setSliderValues(prev => ({ ...prev, cross_split_duplicate_groups: 0 }));
-        break;
-      case 'fix_quality':
-        setSliderValues(prev => ({ ...prev, defect_rate_pct: 0 }));
-        break;
-      case 'clean_labels':
-        setSliderValues(prev => ({ ...prev, label_noise_rate_pct: 0 }));
-        break;
-      case 'perfect':
-        setSliderValues({
-          defect_rate_pct: 0,
-          cross_split_duplicate_groups: 0,
-          redundancy_ratio: 0.02,
-          label_noise_rate_pct: 0,
-          imbalance_ratio: 1.0,
-          cluster_entropy: 0.95,
-        });
-        break;
-      case 'reset':
-        setSliderValues(initialMetrics);
-        break;
-    }
+    setSliderValues(prev => {
+      const next = { ...prev };
+      if (preset === 'zero_leakage' && hasCrossSplit) {
+        next.cross_split_duplicate_groups = 0;
+      } else if (preset === 'fix_quality' && hasDefect) {
+        next.defect_rate_pct = 0;
+      } else if (preset === 'clean_labels' && hasLabelNoise) {
+        next.label_noise_rate_pct = 0;
+      } else if (preset === 'perfect') {
+        if (hasDefect) next.defect_rate_pct = 0;
+        if (hasCrossSplit) next.cross_split_duplicate_groups = 0;
+        if (hasRedundancy) next.redundancy_ratio = 0.01;
+        if (hasLabelNoise) next.label_noise_rate_pct = 0;
+        if (hasImbalance) next.imbalance_ratio = 1.0;
+        if (hasEntropy) next.cluster_entropy = Math.min(1.0, (report?.results?.diversity?.cluster_entropy || 0.7) + 0.2);
+      } else if (preset === 'reset') {
+        return getBaselineMetrics();
+      }
+      return next;
+    });
   };
 
   if (!selectedRun) {
@@ -111,12 +116,12 @@ export const WhatIfTab: React.FC = () => {
       {/* Intro */}
       <div>
         <div className="flex items-center gap-2">
-          <Sliders className="w-5 h-5 text-indigo-400" />
-          <h2 className="text-base font-bold text-white font-sans">
+          <Sliders className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+          <h2 className="text-base font-bold text-zinc-900 dark:text-white font-sans">
             What-If Scenario Sandbox & Accuracy Predictor
           </h2>
         </div>
-        <p className="text-xs text-zinc-400 mt-1 max-w-3xl">
+        <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 max-w-3xl">
           {isSimple
             ? 'Test how much your AI dataset will improve before doing any actual work! Move sliders or click a 1-click fix button to see the projected score increase in real time.'
             : 'Interactive hyperspace rescoring bounded by DIA mathematical readiness weights without modifying underlying sample files.'}
@@ -125,36 +130,36 @@ export const WhatIfTab: React.FC = () => {
 
       {/* 1-Click Preset Action Pills */}
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        <span className="text-xs font-mono text-zinc-400 mr-1 flex items-center gap-1">
-          <Zap className="w-3.5 h-3.5 text-amber-400" /> 1-Click Fixes:
+        <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400 mr-1 flex items-center gap-1">
+          <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" /> 1-Click Fixes:
         </span>
         <button
           onClick={() => applyPreset('zero_leakage')}
-          className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition-all hover:scale-[1.02]"
+          className="px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700/80 text-xs font-medium transition-all hover:scale-[1.02]"
         >
           Remove Cross-Split Leaks
         </button>
         <button
           onClick={() => applyPreset('fix_quality')}
-          className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition-all hover:scale-[1.02]"
+          className="px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700/80 text-xs font-medium transition-all hover:scale-[1.02]"
         >
           Fix Blurry & Dark Photos
         </button>
         <button
           onClick={() => applyPreset('clean_labels')}
-          className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition-all hover:scale-[1.02]"
+          className="px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700/80 text-xs font-medium transition-all hover:scale-[1.02]"
         >
           Relabel Noise to 0%
         </button>
         <button
           onClick={() => applyPreset('perfect')}
-          className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-medium transition-all hover:scale-[1.02]"
+          className="px-3 py-1.5 rounded-xl bg-indigo-600/15 dark:bg-indigo-600/20 hover:bg-indigo-600/25 dark:hover:bg-indigo-600/30 text-indigo-700 dark:text-indigo-300 border border-indigo-500/40 text-xs font-medium transition-all hover:scale-[1.02]"
         >
           Simulate Pristine Dataset
         </button>
         <button
           onClick={() => applyPreset('reset')}
-          className="p-1.5 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors ml-auto"
+          className="p-1.5 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ml-auto"
           title="Reset sliders to baseline"
         >
           <RotateCcw className="w-4 h-4" />
@@ -166,15 +171,15 @@ export const WhatIfTab: React.FC = () => {
         {/* Left Column: Sliders */}
         <div className="lg:col-span-7 space-y-4">
           <GlassCard tilt={false} elevation="sm" className="p-5 space-y-5">
-            <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-300 font-bold border-b border-zinc-800 pb-2">
+            <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-700 dark:text-zinc-300 font-bold border-b border-zinc-200 dark:border-zinc-800 pb-2">
               Hypothetical Metric Adjustments
             </h3>
 
             {/* Cross-Split Duplicate Groups */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-zinc-200 font-semibold">Cross-Split Duplicate Leaks</span>
-                <span className={`font-bold ${sliderValues.cross_split_duplicate_groups === 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span className="text-zinc-800 dark:text-zinc-200 font-semibold">Cross-Split Duplicate Leaks</span>
+                <span className={`font-bold ${sliderValues.cross_split_duplicate_groups === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                   {sliderValues.cross_split_duplicate_groups} leaked groups
                 </span>
               </div>
@@ -195,8 +200,8 @@ export const WhatIfTab: React.FC = () => {
             {/* Defect Rate % */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-zinc-200 font-semibold">Image Defect Rate</span>
-                <span className="text-indigo-400 font-bold">{sliderValues.defect_rate_pct.toFixed(1)}%</span>
+                <span className="text-zinc-800 dark:text-zinc-200 font-semibold">Image Defect Rate</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{sliderValues.defect_rate_pct.toFixed(1)}%</span>
               </div>
               <input
                 type="range"
@@ -215,8 +220,8 @@ export const WhatIfTab: React.FC = () => {
             {/* Label Noise Rate % */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-zinc-200 font-semibold">Label Noise Rate</span>
-                <span className="text-indigo-400 font-bold">{sliderValues.label_noise_rate_pct.toFixed(1)}%</span>
+                <span className="text-zinc-800 dark:text-zinc-200 font-semibold">Label Noise Rate</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{sliderValues.label_noise_rate_pct.toFixed(1)}%</span>
               </div>
               <input
                 type="range"
@@ -235,8 +240,8 @@ export const WhatIfTab: React.FC = () => {
             {/* Redundancy Ratio */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-zinc-200 font-semibold">Duplicate Redundancy Ratio</span>
-                <span className="text-indigo-400 font-bold">{(sliderValues.redundancy_ratio * 100).toFixed(0)}%</span>
+                <span className="text-zinc-800 dark:text-zinc-200 font-semibold">Duplicate Redundancy Ratio</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{(sliderValues.redundancy_ratio * 100).toFixed(0)}%</span>
               </div>
               <input
                 type="range"
@@ -255,8 +260,8 @@ export const WhatIfTab: React.FC = () => {
             {/* Imbalance Ratio */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-mono">
-                <span className="text-zinc-200 font-semibold">Class Imbalance Ratio</span>
-                <span className="text-indigo-400 font-bold">{sliderValues.imbalance_ratio.toFixed(1)}x</span>
+                <span className="text-zinc-800 dark:text-zinc-200 font-semibold">Class Imbalance Ratio</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{sliderValues.imbalance_ratio.toFixed(1)}x</span>
               </div>
               <input
                 type="range"
@@ -277,7 +282,7 @@ export const WhatIfTab: React.FC = () => {
         {/* Right Column: Live Projected Gauge & Score Delta */}
         <div className="lg:col-span-5 space-y-4">
           <GlassCard tilt={true} elevation="md" glow={scoreDelta > 0 ? 'emerald' : 'indigo'} className="p-6 text-center">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Live Projected Score Simulation
             </span>
 
@@ -288,20 +293,20 @@ export const WhatIfTab: React.FC = () => {
             />
 
             {/* Score Delta Banner */}
-            <div className="mt-4 p-4 rounded-xl bg-zinc-900/80 border border-zinc-800">
+            <div className="mt-4 p-4 rounded-xl bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800">
               <div className="flex items-center justify-around font-mono">
                 <div>
                   <span className="text-[10px] text-zinc-500 uppercase block">Baseline</span>
-                  <span className="text-xl font-bold text-zinc-400">{Math.round(baselineScore)}</span>
+                  <span className="text-xl font-bold text-zinc-600 dark:text-zinc-400">{Math.round(baselineScore)}</span>
                 </div>
-                <ArrowRight className="w-5 h-5 text-indigo-400" />
+                <ArrowRight className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
                 <div>
                   <span className="text-[10px] text-zinc-500 uppercase block">Projected</span>
-                  <span className="text-xl font-bold text-white">{Math.round(projectedScore)}</span>
+                  <span className="text-xl font-bold text-zinc-900 dark:text-white">{Math.round(projectedScore)}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-zinc-500 uppercase block">Delta</span>
-                  <span className={`text-xl font-black ${scoreDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <span className={`text-xl font-black ${scoreDelta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                     {scoreDelta >= 0 ? `+${scoreDelta.toFixed(1)}` : scoreDelta.toFixed(1)}
                   </span>
                 </div>
@@ -309,8 +314,8 @@ export const WhatIfTab: React.FC = () => {
 
               {/* Accuracy Recovery Estimate */}
               {projectedAccuracyGain > 0 && (
-                <div className="mt-3 pt-3 border-t border-zinc-800 text-xs text-emerald-300 flex items-center justify-center gap-1.5 font-sans">
-                  <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800 text-xs text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1.5 font-sans">
+                  <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>
                     Estimated test accuracy recovery: <strong>+{projectedAccuracyGain}%</strong>
                   </span>

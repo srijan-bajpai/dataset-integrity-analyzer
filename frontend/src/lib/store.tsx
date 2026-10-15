@@ -18,6 +18,7 @@ interface AppContextValue {
   datasets: Dataset[];
   selectedDataset: Dataset | null;
   setSelectedDataset: (d: Dataset | null) => void;
+  datasetsError: string | null;
   refreshDatasets: () => Promise<void>;
   
   // Runs
@@ -73,14 +74,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState<boolean>(false);
 
+  const [datasetsError, setDatasetsError] = useState<string | null>(null);
+
   // Sync theme
   useEffect(() => {
     localStorage.setItem('dia_theme', theme);
     const root = document.documentElement;
     if (theme === 'dark') {
       root.classList.add('dark');
+      root.classList.remove('light');
     } else {
       root.classList.remove('dark');
+      root.classList.add('light');
     }
   }, [theme]);
 
@@ -106,16 +111,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Refresh datasets
   const refreshDatasets = useCallback(async () => {
+    setDatasetsError(null);
     try {
       const data = await api.getDatasets(password);
       setDatasets(data);
-      if (data.length > 0 && (!selectedDataset || !data.some(d => d.id === selectedDataset.id))) {
-        setSelectedDataset(data[0]);
-      }
-    } catch {
-      // Allow read-only visitors to see empty or graceful state
+      setSelectedDataset(prev => {
+        if (data.length === 0) return null;
+        if (!prev || !data.some(d => d.id === prev.id)) {
+          return data[0];
+        }
+        return data.find(d => d.id === prev.id) || prev;
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to fetch datasets';
+      setDatasetsError(msg);
     }
-  }, [password, selectedDataset]);
+  }, [password]);
 
   // Refresh runs when dataset changes
   const refreshRuns = useCallback(async () => {
@@ -126,8 +137,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       const datasetDetail = await api.getDataset(selectedDataset.id, password);
-      // Dataset detail returns runs list
-      const runSummaries: Array<{ id: string; status: string }> = (datasetDetail as unknown as { runs: Array<{ id: string; status: string }> }).runs || [];
+      const runSummaries = datasetDetail.runs || [];
       const detailedRuns: AnalysisRun[] = await Promise.all(
         runSummaries.map(async r => {
           try {
@@ -137,7 +147,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               id: r.id,
               dataset_id: selectedDataset.id,
               status: r.status as AnalysisRun['status'],
-              created_at: null,
+              created_at: r.created_at || null,
               started_at: null,
               completed_at: null,
               progress_percent: 0,
@@ -151,11 +161,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       setRuns(detailedRuns);
       if (detailedRuns.length > 0) {
-        if (!selectedRun || !detailedRuns.some(r => r.id === selectedRun.id)) {
-          // Select latest completed run, or first run
-          const latestCompleted = detailedRuns.find(r => r.status === 'completed') || detailedRuns[0];
-          setSelectedRun(latestCompleted);
-        }
+        setSelectedRun(prev => {
+          if (prev && detailedRuns.some(r => r.id === prev.id)) {
+            return detailedRuns.find(r => r.id === prev.id) || prev;
+          }
+          const latestCompleted = detailedRuns.find(r => r.status === 'completed');
+          return latestCompleted || detailedRuns[0];
+        });
       } else {
         setSelectedRun(null);
       }
@@ -163,7 +175,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setRuns([]);
       setSelectedRun(null);
     }
-  }, [selectedDataset, password, selectedRun]);
+  }, [selectedDataset?.id, password]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh report for selected run
   const refreshReport = useCallback(async () => {
@@ -189,7 +201,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       setIsLoadingReport(false);
     }
-  }, [selectedRun, password]);
+  }, [selectedRun?.id, selectedRun?.status, password]);
 
   // Initial load
   useEffect(() => {
@@ -199,12 +211,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Load runs on dataset change
   useEffect(() => {
     refreshRuns();
-  }, [selectedDataset?.id, password]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshRuns]);
 
   // Load report on run change
   useEffect(() => {
     refreshReport();
-  }, [selectedRun?.id, selectedRun?.status, password]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshReport]);
 
   // Poll running jobs
   useEffect(() => {
@@ -221,7 +233,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [selectedRun, password]);
+  }, [selectedRun?.id, selectedRun?.status, password]);
 
   return (
     <AppContext.Provider
@@ -236,6 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         datasets,
         selectedDataset,
         setSelectedDataset,
+        datasetsError,
         refreshDatasets,
         runs,
         selectedRun,

@@ -30,6 +30,7 @@ export const Sidebar: React.FC = () => {
     setSelectedRun,
     refreshDatasets,
     refreshRuns,
+    datasetsError,
     setIsUploadOpen,
     setIsCompareOpen,
     isUnlocked,
@@ -95,10 +96,10 @@ export const Sidebar: React.FC = () => {
 
   if (isCollapsed) {
     return (
-      <aside className="w-14 border-r border-zinc-800 bg-zinc-950/70 p-2 flex flex-col items-center gap-3 shrink-0">
+      <aside className="w-14 border-r border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/70 p-2 flex flex-col items-center gap-3 shrink-0">
         <button
           onClick={() => setIsCollapsed(false)}
-          className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+          className="p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           title="Expand workspace sidebar"
         >
           <PanelLeftOpen className="w-5 h-5" />
@@ -108,14 +109,14 @@ export const Sidebar: React.FC = () => {
             if (!isUnlocked) setIsUnlockModalOpen(true);
             else setIsUploadOpen(true);
           }}
-          className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-colors"
+          className="p-2 rounded-xl bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white transition-colors"
           title="Upload dataset ZIP"
         >
           <Plus className="w-5 h-5" />
         </button>
         <button
           onClick={() => setIsCompareOpen(true)}
-          className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+          className="p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           title="Diff two audits"
         >
           <GitCompare className="w-5 h-5" />
@@ -125,9 +126,9 @@ export const Sidebar: React.FC = () => {
   }
 
   return (
-    <aside className="w-64 md:w-72 border-r border-zinc-800/80 bg-zinc-950/70 backdrop-blur-md flex flex-col shrink-0 h-[calc(100vh-4rem)]">
+    <aside className="w-64 md:w-72 border-r border-zinc-200 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md flex flex-col shrink-0 h-[calc(100vh-4rem)]">
       {/* Top Sidebar Action */}
-      <div className="p-3.5 border-b border-zinc-800/80 flex items-center justify-between gap-2">
+      <div className="p-3.5 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between gap-2">
         <button
           onClick={() => {
             if (!isUnlocked) setIsUnlockModalOpen(true);
@@ -140,7 +141,7 @@ export const Sidebar: React.FC = () => {
         </button>
         <button
           onClick={() => setIsCollapsed(true)}
-          className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors"
+          className="p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
           title="Collapse sidebar"
         >
           <PanelLeftClose className="w-4 h-4" />
@@ -164,8 +165,22 @@ export const Sidebar: React.FC = () => {
             </button>
           </div>
 
-          {datasets.length === 0 ? (
-            <div className="p-4 text-center rounded-xl bg-zinc-900/40 border border-dashed border-zinc-800 text-zinc-500 text-xs">
+          {datasetsError ? (
+            <div className="p-3 text-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+              <Database className="w-5 h-5 mx-auto mb-1 opacity-70" />
+              <span className="font-semibold block">Password Required</span>
+              <p className="text-[10px] text-zinc-400 mt-1 mb-2">
+                This instance requires a shared password to view dataset telemetry.
+              </p>
+              <button
+                onClick={() => setIsUnlockModalOpen(true)}
+                className="w-full py-1.5 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px]"
+              >
+                Unlock Studio
+              </button>
+            </div>
+          ) : datasets.length === 0 ? (
+            <div className="p-4 text-center rounded-xl bg-zinc-100/60 dark:bg-zinc-900/40 border border-dashed border-zinc-300 dark:border-zinc-800 text-zinc-500 text-xs">
               <Database className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
               <span>No datasets yet</span>
             </div>
@@ -184,22 +199,22 @@ export const Sidebar: React.FC = () => {
                       }}
                       className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer text-xs font-medium transition-all ${
                         isSelected
-                          ? 'bg-zinc-800 text-white border-zinc-700/80 shadow-sm'
-                          : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                          ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-300 dark:border-zinc-700/80 shadow-sm'
+                          : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-white'
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         {isExpanded ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                          <ChevronDown className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                          <ChevronRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
                         )}
                         <span className="truncate">{dataset.name}</span>
                       </div>
                       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={e => handleStartAudit(e, dataset.id)}
-                          className="p-1 rounded text-zinc-400 hover:text-indigo-400 hover:bg-zinc-700"
+                          className="p-1 rounded text-zinc-500 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-zinc-300 dark:hover:bg-zinc-700"
                           title="Run new audit"
                         >
                           <Play className="w-3 h-3" />
@@ -207,7 +222,7 @@ export const Sidebar: React.FC = () => {
                         <button
                           onClick={e => handleDelete(e, dataset)}
                           disabled={isDeleting === dataset.id}
-                          className="p-1 rounded text-zinc-400 hover:text-rose-400 hover:bg-zinc-700 disabled:opacity-50"
+                          className="p-1 rounded text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-zinc-300 dark:hover:bg-zinc-700 disabled:opacity-50"
                           title="Delete dataset"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -217,7 +232,7 @@ export const Sidebar: React.FC = () => {
 
                     {/* Nested Runs List for Selected Dataset */}
                     {isSelected && isExpanded && (
-                      <div className="pl-6 pr-1 py-1 space-y-1 border-l border-zinc-800/80 ml-3.5 my-1">
+                      <div className="pl-6 pr-1 py-1 space-y-1 border-l border-zinc-200 dark:border-zinc-800/80 ml-3.5 my-1">
                         <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider py-0.5">
                           Audit Runs ({runs.length})
                         </div>
@@ -226,7 +241,7 @@ export const Sidebar: React.FC = () => {
                             <span>No audits run yet</span>
                             <button
                               onClick={e => handleStartAudit(e, dataset.id)}
-                              className="text-indigo-400 hover:underline flex items-center gap-1"
+                              className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                             >
                               <Play className="w-2.5 h-2.5" /> Start
                             </button>
@@ -240,8 +255,8 @@ export const Sidebar: React.FC = () => {
                                 onClick={() => setSelectedRun(run)}
                                 className={`w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors ${
                                   isRunSelected
-                                    ? 'bg-indigo-600/20 text-indigo-300 font-semibold border border-indigo-500/30'
-                                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                                    ? 'bg-indigo-600/15 dark:bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-500/30'
+                                    : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-zinc-200'
                                 }`}
                               >
                                 <div className="flex items-center gap-2 truncate">
@@ -249,7 +264,7 @@ export const Sidebar: React.FC = () => {
                                   <span className="truncate">#{run.id.slice(0, 8)}</span>
                                 </div>
                                 {run.status === 'running' && (
-                                  <span className="text-[10px] text-indigo-400 font-sans">
+                                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-sans">
                                     {run.progress_percent}%
                                   </span>
                                 )}
@@ -268,12 +283,12 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Bottom Footer Action: Diff Two Audits (F1) */}
-      <div className="p-3 border-t border-zinc-800/80 bg-zinc-950/90 space-y-2">
+      <div className="p-3 border-t border-zinc-200 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-950/90 space-y-2">
         <button
           onClick={() => setIsCompareOpen(true)}
-          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/80 text-zinc-300 hover:text-white text-xs font-medium transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/70 dark:bg-zinc-900/60 hover:bg-zinc-200 dark:hover:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white text-xs font-medium transition-colors"
         >
-          <GitCompare className="w-4 h-4 text-indigo-400" />
+          <GitCompare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           <span>Compare Two Audits (Diff)</span>
         </button>
 
@@ -282,7 +297,7 @@ export const Sidebar: React.FC = () => {
           {!isUnlocked && (
             <button
               onClick={() => setIsUnlockModalOpen(true)}
-              className="text-indigo-400 hover:underline"
+              className="text-indigo-600 dark:text-indigo-400 hover:underline"
             >
               Unlock
             </button>

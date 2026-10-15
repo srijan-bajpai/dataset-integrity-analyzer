@@ -100,10 +100,10 @@ export const DimensionsTab: React.FC = () => {
         {/* Header & Subtitle */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-base font-bold text-white font-sans">
+            <h2 className="text-base font-bold text-zinc-900 dark:text-white font-sans">
               6 Diagnostic Integrity Dimensions
             </h2>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
               {isSimple
                 ? 'Each health score grades one specific part of your dataset, from photo clarity to fairness.'
                 : 'Orthogonal diagnostic metrics normalized to 0–100 scale using bounded sigmoid scoring functions.'}
@@ -129,11 +129,11 @@ export const DimensionsTab: React.FC = () => {
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-xl bg-zinc-900 border border-zinc-800">
+                      <div className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
                         {dim.icon}
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-white font-sans">
+                        <h4 className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
                           {dim.title}
                         </h4>
                         <span className="text-[10px] text-zinc-500 font-mono">
@@ -146,12 +146,12 @@ export const DimensionsTab: React.FC = () => {
                       <span className={`text-xl font-black font-sans ${colors.text}`}>
                         {Math.round(dim.score)}
                       </span>
-                      <span className="text-zinc-500 text-xs font-mono">/100</span>
+                      <span className="text-zinc-400 dark:text-zinc-500 text-xs font-mono">/100</span>
                     </div>
                   </div>
 
                   {/* Progress Bar */}
-                  <div className="w-full bg-zinc-800/80 rounded-full h-1.5 mt-3 overflow-hidden">
+                  <div className="w-full bg-zinc-200 dark:bg-zinc-800/80 rounded-full h-1.5 mt-3 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500`}
                       style={{
@@ -162,12 +162,12 @@ export const DimensionsTab: React.FC = () => {
                   </div>
 
                   {/* Plain English vs Stats description */}
-                  <p className="text-xs text-zinc-400 mt-3 leading-relaxed">
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-3 leading-relaxed">
                     {isSimple ? translation.simple : translation.technical}
                   </p>
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-zinc-800/80 flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                <div className="mt-3 pt-2.5 border-t border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
                   <span className="truncate">{dim.rawMetric}</span>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${colors.bg} ${colors.text}`}>
                     {tier}
@@ -191,12 +191,12 @@ export const DimensionsTab: React.FC = () => {
           <GlassCard tilt={false} elevation="sm" className="p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-indigo-400" />
-                <h4 className="text-xs font-bold text-white font-sans">
+                <BarChart2 className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+                <h4 className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
                   Class Distribution & Representation
                 </h4>
               </div>
-              <span className="text-xs font-mono text-zinc-400">
+              <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400">
                 {Object.keys(classCounts).length} classes
               </span>
             </div>
@@ -213,10 +213,10 @@ export const DimensionsTab: React.FC = () => {
                   return (
                     <div key={cls} className="space-y-1">
                       <div className="flex justify-between text-xs font-mono">
-                        <span className="text-zinc-300 font-medium truncate">{cls}</span>
-                        <span className="text-zinc-400">{count} images</span>
+                        <span className="text-zinc-800 dark:text-zinc-300 font-medium truncate">{cls}</span>
+                        <span className="text-zinc-500 dark:text-zinc-400">{count} images</span>
                       </div>
-                      <div className="w-full bg-zinc-800/80 rounded-full h-1.5 overflow-hidden">
+                      <div className="w-full bg-zinc-200 dark:bg-zinc-800/80 rounded-full h-1.5 overflow-hidden">
                         <div
                           className="bg-indigo-500 h-full rounded-full transition-all duration-300"
                           style={{ width: `${pct}%` }}
@@ -233,43 +233,43 @@ export const DimensionsTab: React.FC = () => {
           <GlassCard tilt={false} elevation="sm" className="p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Tag className="w-4 h-4 text-rose-400" />
-                <h4 className="text-xs font-bold text-white font-sans">
+                <Tag className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                <h4 className="text-xs font-bold text-zinc-900 dark:text-white font-sans">
                   Confident Learning Label Disagreements
                 </h4>
               </div>
-              <span className="text-xs font-mono text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+              <span className="text-xs font-mono text-rose-700 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
                 {results?.labels?.label_noise_rate_pct !== undefined ? `${results.labels.label_noise_rate_pct}% estimated noise` : 'Clean'}
               </span>
             </div>
 
-            <p className="text-xs text-zinc-400 mb-3">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-3">
               {isSimple
                 ? 'Photos where our AI embedding model strongly suspects the human tag is incorrect.'
                 : 'Out-of-fold predicted probability matrix thresholded via Northcutt et al. Confident Learning.'}
             </p>
 
             {Object.keys(noiseMatrix).length === 0 ? (
-              <div className="p-6 text-center text-xs text-emerald-400 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                <CheckCircle2 className="w-6 h-6 mx-auto mb-1 text-emerald-400" />
+              <div className="p-6 text-center text-xs text-emerald-700 dark:text-emerald-400 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                <CheckCircle2 className="w-6 h-6 mx-auto mb-1 text-emerald-600 dark:text-emerald-400" />
                 <span>Zero confident label noise detected! All labels match image visual features.</span>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs font-mono">
                   <thead>
-                    <tr className="border-b border-zinc-800 text-zinc-400">
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">
                       <th className="pb-2">Given Label</th>
                       <th className="pb-2">Likely True Label</th>
                       <th className="pb-2 text-right">Disagreements</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60 text-zinc-800 dark:text-zinc-300">
                     {Object.entries(noiseMatrix).map(([fromLabel, toMap]) =>
                       Object.entries(toMap as Record<string, number>).map(([toLabel, count]) => (
                         <tr key={`${fromLabel}-${toLabel}`}>
-                          <td className="py-2 text-rose-400">{fromLabel}</td>
-                          <td className="py-2 text-emerald-400">{toLabel}</td>
+                          <td className="py-2 text-rose-600 dark:text-rose-400">{fromLabel}</td>
+                          <td className="py-2 text-emerald-600 dark:text-emerald-400">{toLabel}</td>
                           <td className="py-2 text-right font-bold">{count}</td>
                         </tr>
                       ))
