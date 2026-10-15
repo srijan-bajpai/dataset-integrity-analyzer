@@ -34,39 +34,8 @@ class BiasImpactPredictor:
         }
         
     def predict(self) -> Dict[str, Any]:
-        descriptor = self._build_descriptor()
-        
-        ir = descriptor['imbalance_ratio']
-        noise = descriptor['label_noise']
-        
-        # Calibration from C2 Spike:
-        # IR 1.0 -> ~0% drop
-        # IR 5.0 -> ~12% drop
-        # IR 20.0 -> ~40% drop
-        # Log-linear fit approximation: drop ~= 13.3 * log(IR)
-        
-        if ir < 1.0:
-            ir = 1.0
-            
-        expected_drop = 13.3 * np.log(ir)
-        
-        # Additive penalty for label noise (assume 1% noise = 0.5% drop roughly)
-        expected_drop += (noise * 100) * 0.5
-        
-        # Additive penalty for cross-dimensional confounds (3% drop per confound)
-        expected_drop += descriptor['confound_count'] * 3.0
-        
-        # Cap at 80% degradation
-        expected_drop = min(max(expected_drop, 0.0), 80.0)
-        
-        # Prediction interval (heuristic +/- 20%)
-        interval_low = max(0.0, expected_drop * 0.8)
-        interval_high = min(100.0, expected_drop * 1.2)
-        
         return {
-            'expected_accuracy_drop_pct': round(expected_drop, 2),
-            'interval_low': round(interval_low, 2),
-            'interval_high': round(interval_high, 2),
-            'features': descriptor,
-            'is_simplified_prototype': True
+            "status": "unavailable",
+            "reason": "No validated impact model is configured. This release reports dataset findings without inventing an accuracy-drop estimate.",
+            "is_validated": False,
         }

@@ -1,79 +1,58 @@
-import numpy as np
+"""Versioned, coverage-aware dataset readiness score."""
+
+import math
+from typing import Any
+
 
 class ReadinessScorer:
-    """
-    Computes the unified 0-100 AI Readiness Score based on the outputs of the 6 dimensions.
-    (REQ-74, REQ-75, REQ-77)
-    """
-    def __init__(self, agg_results: dict):
-        self.agg = agg_results
-        self.weights = {
-            'Balance': 0.20,
-            'Fairness': 0.20,
-            'Quality': 0.15,
-            'Uniqueness': 0.15,
-            'Diversity': 0.15,
-            'Label Integrity': 0.15
+    VERSION = "readiness-v2"
+    WEIGHTS = {
+        "Balance": 0.20,
+        "Fairness": 0.20,
+        "Quality": 0.15,
+        "Uniqueness": 0.15,
+        "Diversity": 0.15,
+        "Label Integrity": 0.15,
+    }
+
+    @staticmethod
+    def _scale(value: float | None, low: float, high: float, reverse: bool = False) -> float | None:
+        if value is None or not math.isfinite(float(value)):
+            return None
+        normalized = 100 * (min(max(float(value), low), high) - low) / (high - low)
+        return 100 - normalized if reverse else normalized
+
+    def compute(self, results: dict[str, Any]) -> dict[str, Any]:
+        distribution = results.get("distribution", {})
+        quality = results.get("quality", {})
+        duplicates = results.get("duplicates", {})
+        diversity = results.get("diversity", {})
+        labels = results.get("labels", {})
+        fairness = results.get("fairness", {})
+
+        candidates = {
+            "Balance": self._scale(distribution.get("imbalance_ratio"), 1.0, 10.0, reverse=True),
+            "Fairness": self._scale(fairness.get("worst_absolute_target_gap"), 0.0, 0.5, reverse=True),
+            "Quality": self._scale(quality.get("defect_rate_pct"), 0.0, 20.0, reverse=True),
+            "Uniqueness": self._scale(duplicates.get("redundancy_ratio"), 0.0, 0.1, reverse=True),
+            "Diversity": self._scale(diversity.get("cluster_entropy"), 0.0, 1.0),
+            "Label Integrity": self._scale(labels.get("label_noise_rate_pct"), 0.0, 10.0, reverse=True),
         }
-        
-    def _normalize(self, val, min_val, max_val, reverse=False):
-        """Map val to 0-100 scale based on min/max bounds."""
-        if val is None or np.isnan(val):
-            return 100.0 if not reverse else 0.0
-            
-        val = max(min_val, min(val, max_val))
-        score = 100 * (val - min_val) / (max_val - min_val)
-        return 100 - score if reverse else score
-        
-    def compute(self):
-        scores = {}
-        
-        # Balance (based on Imbalance Ratio)
-        ir = self.agg.get('distribution', {}).get('imbalance_ratio', 1.0)
-        # map 1.0 -> 100, 10.0 -> 0
-        scores['Balance'] = self._normalize(ir, 1.0, 10.0, reverse=True)
-        
-        # Fairness (Skip if demographic inference not available, redistribute weights)
-        scores['Fairness'] = 100.0 # Placeholder until attribute inference is implemented
-        
-        # Quality (Based on pct_blurred + pct_underexposed + pct_overexposed)
-        q_stats = self.agg.get('quality', {})
-        defect_pct = q_stats.get('pct_blurred', 0) + q_stats.get('pct_underexposed', 0)
-        # map 0% -> 100, 20% -> 0
-        scores['Quality'] = self._normalize(defect_pct, 0.0, 20.0, reverse=True)
-        
-        # Uniqueness (based on redundancy ratio)
-        redundancy = self.agg.get('duplicates', {}).get('redundancy_ratio', 0.0)
-        # map 0 -> 100, 0.1 (10%) -> 0
-        scores['Uniqueness'] = self._normalize(redundancy, 0.0, 0.1, reverse=True)
-        
-        # Diversity (based on cluster entropy)
-        ent = self.agg.get('diversity', {}).get('cluster_entropy', 1.0)
-        # map 0 -> 0, 1 -> 100
-        scores['Diversity'] = self._normalize(ent, 0.0, 1.0)
-        
-        # Label Integrity (based on label noise rate)
-        noise = self.agg.get('labels', {}).get('label_noise_rate', 0.0)
-        # map 0 -> 100, 0.1 -> 0
-        scores['Label Integrity'] = self._normalize(noise, 0.0, 0.1, reverse=True)
-        
-        # Weighted mean
-        final_score = 0
-        for dim, weight in self.weights.items():
-            final_score += scores[dim] * weight
-            
-        # Hard gate (REQ-77)
-        if any(s < 30 for s in scores.values()):
-            final_score = min(final_score, 49.0)
-            
+        scores = {name: round(value, 1) for name, value in candidates.items() if value is not None}
+        total_weight = sum(self.WEIGHTS[name] for name in scores)
+        score = (
+            sum(scores[name] * self.WEIGHTS[name] for name in scores) / total_weight
+            if total_weight else None
+        )
+        verdict = None
+        if score is not None:
+            verdict = "Critical / Not Usable" if score < 40 else "Needs Remediation" if score < 70 else "Acceptable" if score < 85 else "Production Ready"
         return {
-            'overall_score': round(final_score, 1),
-            'sub_scores': {k: round(v, 1) for k, v in scores.items()},
-            'verdict': self._get_verdict(final_score)
+            "version": self.VERSION,
+            "overall_score": round(score, 1) if score is not None else None,
+            "sub_scores": scores,
+            "unavailable_dimensions": sorted(set(candidates) - set(scores)),
+            "coverage_pct": round(100 * total_weight, 1),
+            "verdict": verdict,
+            "weights": {name: self.WEIGHTS[name] for name in scores},
         }
-        
-    def _get_verdict(self, score):
-        if score < 40: return "Critical / Not Usable"
-        if score < 70: return "Needs Remediation"
-        if score < 85: return "Acceptable"
-        return "Production Ready"
